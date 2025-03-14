@@ -78,4 +78,10 @@ class MeterController extends Controller
 
         return to_route('meters.index')->with('status', 'Meter deleted successfully!');
     }
+
+    public function latestReading(Meter $meter)
+    {
+        $latestReading = $meter->meterReadings()->latest('reading_date')->first();
+        return response()->json($latestReading);
+    }
 }

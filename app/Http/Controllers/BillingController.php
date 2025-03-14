@@ -11,6 +11,7 @@ use App\Models\BillingMeterReadingDetail;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\BillingNotification;
 use App\Models\EmailLog;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -40,11 +41,27 @@ class BillingController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreBillingRequest $request)
+    public function store(Request $request)
     {
+        $request->validate([
+            'meter_id' => 'required|exists:meters,id',
+            'reading_value' => [
+                'required',
+                'numeric',
+                function ($attribute, $value, $fail) use ($request) {
+                    $lastReading = MeterReading::where('meter_id', $request->meter_id)
+                        ->latest('reading_date')
+                        ->value('reading_value');
+    
+                    if ($lastReading !== null && $value <= $lastReading) {
+                        $fail("The new reading must be greater than the last reading ({$lastReading}).");
+                    }
+                },
+            ],
+        ]);
         // Get the previous meter reading
         $previousReading = MeterReading::where('meter_id', $request->meter_id)
-            ->latest()
+            ->latest('reading_date')
             ->first();
 
         $previousValue = $previousReading ? $previousReading->reading_value : 0;
@@ -65,14 +82,14 @@ class BillingController extends Controller
         ]);
 
         // Create the bill
-        $bill = Billing::create([
+        $billing = Billing::create([
             'meter_id' => $request->meter_id,            
             'amount_due' => $amountDue,
             'status' => 'pending',
         ]);
 
         BillingMeterReadingDetail::create([
-            'billing_id' => $bill->id,
+            'billing_id' => $billing->id,
             'previous_reading_value' => $previousValue,
             'current_reading_value' => $request->reading_value,
             'units_used' => $unitsUsed,
@@ -103,7 +120,7 @@ class BillingController extends Controller
     public function edit(Billing $billing)
     {
         return Inertia::render('billing/Edit', [
-            'bill' => $bill->load('customer'),
+            'bill' => $billing->load('customer'),
             'meters' => Meter::select('id', 'name')->with('customers')->get(),
         ]);
     }
@@ -113,7 +130,7 @@ class BillingController extends Controller
      */
     public function update(UpdateBillingRequest $request, Billing $billing)
     {
-        $bill->update($request->validated());
+        $billing->update($request->validated());
 
         return to_route('billing.index')->with('status', 'Bill updated successfully!');
     }

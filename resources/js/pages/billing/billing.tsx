@@ -1,4 +1,5 @@
-import { Head, usePage, useForm, router } from "@inertiajs/react";
+import { Head, usePage, router } from "@inertiajs/react";
+import { useForm } from 'laravel-precognition-react-inertia';
 import AppLayout from "@/layouts/app-layout";
 import { type BreadcrumbItem } from "@/types";
 import { useState } from "react";
@@ -7,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Pencil, Trash, PlusCircle } from "lucide-react";
 import Table from "@/components/table";
 import Modal from "@/components/ui/modal";
+import Pagination from "@/components/pagination";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { 
@@ -20,12 +22,16 @@ export default function Bills({ bills, meters }) {
     const [search, setSearch] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [editBill, setEditBill] = useState(null);
+    const [lastReading, setLastReading] = useState(0);
 
-    const form = useForm({
-        meter_id: "",
-        reading_value: "",
-        previous_reading: "",
-        status: "pending",
+    // const form = useForm({
+    //     meter_id: "",
+    //     reading_value: "",
+    // });
+
+    const form = useForm('post', '/billing', {
+        meter_id: '',
+        reading_value: '',
     });
 
     const handleDelete = (id) => {
@@ -36,28 +42,38 @@ export default function Bills({ bills, meters }) {
         }
     };
 
+    const handleValidation = (e) => {
+        form.setData('reading_value', e.target.value);
+        form.validate('reading_value');
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        const method = editBill ? "put" : "post";
-        const url = editBill ? `/billing/${editBill.id}` : "/billing";
-
-        form[method](url, {
+        
+        // Dynamic method and URL based on edit mode
+        const method = editBill ? 'put' : 'post';
+        const url = editBill ? `/billing/${editBill.id}` : '/billing';
+    
+        form.submit({
+            method,
+            url,
+            preserveScroll: true,
             onSuccess: () => {
                 form.reset();
                 setShowModal(false);
-                setEditBill(null);
+                setEditBill(null);  // Reset edit mode after saving
             },
         });
     };
 
     const openEditModal = (bill) => {
         setEditBill(bill);
+    
         form.setData({
             meter_id: bill.meter_id,
             reading_value: bill.details.current_reading_value,
-            previous_reading: bill.details.previous_reading_value,
-            status: bill.status,
         });
+    
         setShowModal(true);
     };
 
@@ -135,12 +151,14 @@ export default function Bills({ bills, meters }) {
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
                             <h2 className="text-xl font-bold">{editBill ? "Edit Bill" : "Add Bill"}</h2>
                             <select
+                                id="meter_id"
                                 name="meter_id"
                                 value={form.data.meter_id}
                                 onChange={(e) => form.setData('meter_id', e.target.value)}
                                 required
                                 className="w-full p-2 border rounded"
                             >
+                                <option value="">Select a Meter</option>
                                 {meters.map(meter => (
                                     <option key={meter.id} value={meter.id}>
                                         {meter.meter_name} - {meter.customer?.name || "N/A"}
@@ -149,19 +167,17 @@ export default function Bills({ bills, meters }) {
                             </select>
                             {errors.meter_id && <div className="text-red-500 text-sm mt-1">{errors.meter_id}</div>}
                             <Input
+                                id="reading_value"
                                 type="number"
                                 placeholder="Current Reading"
                                 value={form.data.reading_value}
-                                onChange={(e) => form.setData('reading_value', e.target.value)}
+                                onChange={handleValidation}
                                 required
                             />
-                            {errors.reading_value && <div className="text-red-500 text-sm mt-1">{errors.reading_value}</div>}
-                            <Input
-                                type="number"
-                                placeholder="Previous Reading"
-                                value={form.data.previous_reading}
-                                disabled
-                            />
+                            {form.invalid('reading_value') && (
+                                <div className="text-red-500 text-sm mt-1">{form.errors.reading_value}</div>
+                            )}
+                            
                             <p>Amount Due: KES {calculateAmountDue().toFixed(2)}</p>
                             {errors.status && <div className="text-red-500 text-sm mt-1">{errors.status}</div>}
                             <div className="flex justify-end gap-2">

@@ -31,7 +31,7 @@ class ExpenseController extends Controller
      */
     public function store(StoreExpenseRequest $request)
     {
-        expense = Expense::create([
+        $expense = Expense::create([
             'type' => $request->type,
             'description' => $request->description,
             'amount' => $request->amount,

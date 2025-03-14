@@ -23,7 +23,20 @@ class StoreBillingRequest extends FormRequest
     {
         return [
             'meter_id' => 'required|exists:meters,id',
-            'reading_value' => 'required|numeric|min:0',
+            // 'reading_value' => 'required|numeric|min:0',
+            'reading_value' => [
+                'required',
+                'numeric',
+                function ($attribute, $value, $fail) use ($request) {
+                    $lastReading = MeterReading::where('meter_id', $request->meter_id)
+                        ->latest('reading_date')
+                        ->value('reading_value');
+    
+                    if ($lastReading !== null && $value <= $lastReading) {
+                        $fail("The new reading must be greater than the last reading ({$lastReading}).");
+                    }
+                },
+            ],
         ];
     }
 }

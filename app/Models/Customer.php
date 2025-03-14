@@ -18,6 +18,7 @@ class Customer extends Model
         'email',
         'phone',
         'address',
+        'account_number',
         'status',
     ];
 

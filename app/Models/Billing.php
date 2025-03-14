@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Models\BillingMeterReadingDetail;
 use Carbon\Carbon;
 
 class Billing extends Model
@@ -34,6 +35,16 @@ class Billing extends Model
     public function details()
     {
         return $this->hasOne(BillingMeterReadingDetail::class);
+    }
+
+    /**
+     * Get the latest meter reading for the meter.
+     */
+    public function currentReading(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => BillingMeterReadingDetail::where('billing_id', $this->id)->latest()->first()?->current_reading_value ?? 0
+        );
     }
 
     /**

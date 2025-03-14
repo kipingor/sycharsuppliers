@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Customer;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Support\Str;
 
 class CustomerController extends Controller
 {
@@ -33,7 +34,7 @@ class CustomerController extends Controller
      */
     public function store(StoreCustomerRequest $request)
     {
-        $customer = Customer::create($request->validated());
+        $customer = Customer::create(array_merge($request->validated(), ['account_number' => Str::random(6)]));
 
         return to_route('customers.index')->with('status', 'Customer created successfully!');
     }
@@ -64,7 +65,7 @@ class CustomerController extends Controller
     {
         $customer->update($request->validated());
 
-        return to_route('customers.edit', $customer)->with('status', 'Profile updated successfully!');
+        return to_route('customers.index', $customer)->with('status', 'Profile updated successfully!');
     }
 
     /**
