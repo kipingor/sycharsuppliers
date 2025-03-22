@@ -61,12 +61,22 @@ class DatabaseSeeder extends Seeder
         Customer::factory(20)->create()->each(function ($customer) {
             $meter = Meter::factory()->create(['customer_id' => $customer->id]);
 
+            $previousReading = 0;
             // Generate 12 monthly meter readings per meter
             for ($i = 1; $i <= 12; $i++) {
                 $readingDate = Carbon::now()->subMonths(12 - $i);
-                $reading = MeterReading::factory()->create(['meter_id' => $meter->id, 'reading_date' => $readingDate]);
-                $previousReading = MeterReading::where('meter_id', $reading->meter_id)->where('reading_date', '<', $reading->reading_date)->orderBy('reading_date', 'desc')->first()->reading_value ?? 0;
-                $unitsUsed = $reading->reading_value - $previousReading;
+
+                // Ensure the new reading is greater than the previous one
+                $readingValue = $previousReading + rand(1, 50); // Increase by 1 to 50 units
+
+                $reading = MeterReading::factory()->create([
+                    'meter_id' => $meter->id,
+                    'reading_date' => $readingDate,
+                    'reading_value' => $readingValue,
+                ]);
+
+                // $previousReading = MeterReading::where('meter_id', $reading->meter_id)->where('reading_date', '<', $reading->reading_date)->orderBy('reading_date', 'desc')->first()->reading_value ?? 0;
+                $unitsUsed = $readingValue - $previousReading;
 
                 // Generate a bill after each meter reading
                 $bill = Billing::factory()->create([
@@ -77,7 +87,7 @@ class DatabaseSeeder extends Seeder
                 BillingMeterReadingDetail::factory()->create([
                     'billing_id' => $bill->id,
                     'previous_reading_value' => $previousReading,
-                    'current_reading_value' => $reading->reading_value,
+                    'current_reading_value' => $readingValue,
                     'units_used' => $unitsUsed,
                 ]);
 
@@ -91,6 +101,9 @@ class DatabaseSeeder extends Seeder
                     $payment->status = 'pending';
                     $payment->save();
                 }
+
+                // Update previous reading for the next iteration
+                $previousReading = $readingValue;
             }
         });
 

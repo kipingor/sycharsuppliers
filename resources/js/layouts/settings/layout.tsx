@@ -22,6 +22,11 @@ const sidebarNavItems: NavItem[] = [
         url: '/settings/appearance',
         icon: null,
     },
+    {
+        title: 'Users',
+        url: '/settings/users',
+        icon: null,
+    },
 ];
 
 export default function SettingsLayout({ children }: PropsWithChildren) {

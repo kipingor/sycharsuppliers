@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\MeterReading;
+use App\Models\Meter;
 
 class MeterReadingController extends Controller
 {
@@ -19,7 +21,7 @@ class MeterReadingController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validatedData = $request->validate([
             'meter_id' => 'required|exists:meters,id',
             'customer_id' => 'required|exists:customers,id',
             'reading' => 'required|integer|min:0',
@@ -27,8 +29,19 @@ class MeterReadingController extends Controller
             'recorded_by' => 'nullable|string',
         ]);
 
-        $reading = MeterReading::create($request->all());
+        $reading = MeterReading::create($validatedData);
 
-        return response()->json(['message' => 'Meter reading recorded successfully', 'reading' => $reading]);
+        return response()->json(['message' => 'Meter reading recorded successfully', 'reading' => $reading], 201);
+    }
+
+    public function getLastReading(Meter $meter)
+    {
+        // $validatedData = $request->validate(['meter_id' => 'required|exists:meters,id']);
+        
+        $lastReading = MeterReading::where('meter_id', $meter->id)
+            ->orderBy('reading_date', 'desc')
+            ->first();
+        
+        return response()->json($lastReading);
     }
 }

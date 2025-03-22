@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Customer;
 use App\Models\Meter;
 use App\Models\MeterReading;
+use App\Models\Billing;
 use App\Models\Payment;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -33,12 +34,12 @@ class DashboardController extends Controller
         }
         $endDate = now()->endOfDay();
 
-        $totalCustomers = Customer::git unt();
+        $totalCustomers = Customer::count();
         $activeMeters = Meter::where('status', 'active')->count();
 
         $totalRevenue = Payment::whereBetween('created_at', [$startDate, $endDate])->sum('amount');
-        $pendingPayments = Payment::where('status', 'pending')->sum('amount');
-        $overdueBillsCount = Payment::where('status', 'overdue')->count();
+        $pendingPayments = Billing::where('status', 'pending')->sum('amount_due');
+        $overdueBillsCount = Billing::where('status', 'overdue')->count();
 
         $monthlyRevenue = Payment::selectRaw('MONTH(created_at) as month, SUM(amount) as total')
             ->whereBetween('created_at', [$startDate->copy()->subYear(), $endDate])

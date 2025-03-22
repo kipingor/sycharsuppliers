@@ -5,6 +5,8 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\MeterController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\ReportsController;
+use App\Http\Requests\StoreBillingRequest;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -26,6 +28,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('billing/{billing}', [BillingController::class, 'destroy'])->name('billing.delete');
     Route::resource('meters', MeterController::class);
     Route::get('/meters/{meter}/latest-reading', [MeterController::class, 'latestReading']);
+    Route::resource('reports', ReportsController::class);
 
     Route::resource('payments', PaymentController::class);
 

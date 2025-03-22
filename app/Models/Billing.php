@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\BillingMeterReadingDetail;
 use Carbon\Carbon;
 
@@ -30,6 +31,14 @@ class Billing extends Model
     public function meter(): BelongsTo
     {
         return $this->belongsTo(Meter::class);
+    }
+
+    /**
+     * Get the Payments associated with the bill.
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
     }
 
     public function details()

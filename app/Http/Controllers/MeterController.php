@@ -16,11 +16,49 @@ class MeterController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return Inertia::render('meters/Index', [
-            'meters' => Meter::with('customer')->paginate(10),
+        $search = $request->input('search');
+
+        $meters = Meter::with('customer')
+            ->with(['meterReadings' => function ($query) {
+                $query->selectRaw('meter_id, max(reading_value) - min(reading_value) as total_units')
+                    ->groupBy('meter_id');
+            }])
+            ->withSum('bills', 'amount_due')
+            ->withSum(['bills as total_paid' => function ($query) {
+                $query->join('payments', 'billings.id', '=', 'payments.billing_id')
+                    ->where('payments.status', 'completed');
+            }], 'payments.amount')
+            ->when($search, function ($query, $search) {
+                $query->where('meter_number', 'like', "%{$search}%")
+                    ->orWhereHas('customer', function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    });
+            })
+            ->paginate(10)
+            ->through(function ($meter) {
+                $totalBilled = $meter->bills_sum_amount_due ?? 0;
+                $totalPaid = $meter->total_paid ?? 0;
+                $balanceDue = $totalBilled - $totalPaid;
+
+                return [
+                    'id' => $meter->id,
+                    'meter_number' => $meter->meter_number,
+                    'customer' => $meter->customer,
+                    'location' => $meter->location,
+                    'total_units' => $meter->meterReadings->first()->total_units ?? 0,
+                    'total_billed' => $totalBilled,
+                    'total_paid' => $totalPaid,
+                    'balance_due' => $balanceDue,
+                    'status' => $meter->status,
+                ];
+            });
+
+        return Inertia::render('meters/meters', [
+            'meters' => $meters,
         ]);
+        
     }
 
     /**

@@ -1,12 +1,38 @@
 import { Head, usePage, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { type BreadcrumbItem, type Meter } from "@/types";
+import { type BreadcrumbItem } from "@/types";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Trash, PlusCircle } from "lucide-react";
-import Table from "@/components/Table";
+import { Pencil, Trash, PlusCircle, EllipsisVertical } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/table";
+import { DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenu } from "@/components/ui/dropdown-menu";
 import Modal from "@/components/ui/modal";
+import { debounce } from "lodash";
+import Pagination from "@/components/pagination";
+
+
+interface Meter {
+    id: number;
+    meter_name: string;
+    meter_number: string;
+    location: string;
+    status: 'active' | 'inactive' | 'replaced';
+    total_units: number;
+    total_billed: number;
+    total_paid: number;
+    balance_due: number;
+    customer?: {
+        name: string;
+    };
+}
+
+interface MeterProps {
+    meters: {
+        data:Meter[];
+        links: any[];
+    };
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -15,12 +41,23 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Meters() {
-    const { meters } = usePage<{ meters: { data: Meter[]; links: any } }>().props;
-
+export default function Meters({ meters }: MeterProps) {
+    const { errors } = usePage().props;
     const [search, setSearch] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [editMeter, setEditMeter] = useState<Meter | null>(null);
+
+    const handleSearch = debounce((query: string) => {
+        router.reload({
+            only: ['meters'],
+            data: { search: query },
+            replace: true,
+        });
+    }, 300);
+
+    const filteredMeters = meters.data.filter((m: any) =>
+        m.customer?.name?.toLowerCase()?.includes(search.toLowerCase())
+    );
 
     const handleDelete = (id: number) => {
         if (confirm("Are you sure you want to delete this meter?")) {
@@ -40,6 +77,14 @@ export default function Meters() {
 
         setShowModal(false);
         setEditMeter(null);
+    };
+
+    const formatCurrency = (value: any) => Number(value ?? 0).toFixed(2);
+
+    const statusClasses = {
+        active: "bg-lime-400/20 text-lime-700 dark:bg-lime-400/10 dark:text-lime-300",
+        replaced: "bg-amber-400/15 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400",
+        inactive: "bg-stone-400/15 text-stone-700 dark:bg-stone-400/10 dark:text-stone-400",
     };
 
     return (
@@ -68,62 +113,64 @@ export default function Meters() {
                     </div>
                 </div>
 
-                <Table
-                    headers={["ID", "Meter Number", "Customer", "Location", "Status", "Actions"]}
-                    data={meters.data
-                        .filter((m) =>
-                            m.meter_number.toLowerCase().includes(search.toLowerCase())
-                        )
-                        .map((meter) => [
-                            meter.id,
-                            meter.meter_number,
-                            meter.customer.name,
-                            meter.location,
-                            <span
-                                key={meter.id}
-                                className={`px-2 py-1 rounded ${
-                                    meter.status === "active"
-                                        ? "bg-green-200 text-green-800"
-                                        : "bg-red-200 text-red-800"
-                                }`}
-                            >
-                                {meter.status}
-                            </span>,
-                            <div key={meter.id} className="flex gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                        setEditMeter(meter);
-                                        setShowModal(true);
-                                    }}
-                                >
-                                    <Pencil size={16} />
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => handleDelete(meter.id)}
-                                >
-                                    <Trash size={16} />
-                                </Button>
-                            </div>,
-                        ])}
-                />
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                            {["ID", "Meter Number", "Customer", "Location", "Total Units", "Total Billed", "Total Paid", "Balance Due", "Status", "Actions"].map((header) => (
+                                <TableCell key={header} className="text-left font-medium">
+                                    {header}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {filteredMeters.map((meter) => (
+                            <TableRow key={meter.id}>
+                                <TableCell>{meter.id}</TableCell>
+                                <TableCell>{meter.meter_number}</TableCell>
+                                <TableCell>{meter.customer?.name || 'N/A'}</TableCell>
+                                <TableCell>{meter.location}</TableCell>
+                                <TableCell>{meter.total_units}</TableCell>
+                                <TableCell>{`KES ${formatCurrency(meter.total_billed)}`}</TableCell>
+                                <TableCell>{`KES ${formatCurrency(meter.total_paid)}`}</TableCell>
+                                <TableCell>{`KES ${formatCurrency(meter.balance_due)}`}</TableCell>
+                                <TableCell>
+                                    <span className={`inline-flex items-center gap-x-1.5 rounded-md px-1.5 py-0.5 text-sm/5 font-medium sm:text-xs/5 ${statusClasses[meter.status] || statusClasses.active}`}>
+                                        {meter.status ?? 'Active'}
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger>
+                                            <EllipsisVertical size={16} />
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                            <DropdownMenuItem onClick={() => console.log('View', meter.id)}>
+                                                View
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => console.log('Record Payment', meter.id)}>
+                                                Record Payment
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => {
+                                                                        setEditMeter(meter);
+                                                                        setShowModal(true);
+                                                                    }}>
+                                                <Pencil size={16} /> Edit
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => handleDelete(meter.id)}>
+                                                <Trash size={16} /> Delete
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
 
                 {/* Pagination */}
-                <div className="mt-4 flex justify-between">
-                    {meters.links.map((link: { url: string; label: string; active: boolean }, index: number) => (
-                        <Button
-                            key={index}
-                            variant={link.active ? "default" : "outline"}
-                            onClick={() => link.url && router.get(link.url)}
-                            disabled={!link.url}
-                        >
-                            {link.label}
-                        </Button>
-                    ))}
-                </div>
+                <Pagination links={meters.links} />
+                
 
                 {/* Add/Edit Meter Modal */}
                 {showModal && (

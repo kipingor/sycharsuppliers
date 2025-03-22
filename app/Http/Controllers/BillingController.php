@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreBillingRequest;
 use App\Http\Requests\UpdateBillingRequest;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use App\Models\Billing;
 use App\Models\Meter;
 use App\Models\MeterReading;
@@ -20,10 +21,20 @@ class BillingController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
+        $query = Billing::with('meter.customer');
+
+        if ($search = $request->input('search')) {
+            $query->whereHas('meter.customer', function ($q) use ($search) {
+                $q->where('name', 'like', '%' . $search . '%');
+            });
+        }
+
+        $bills = $query->latest()->paginate(10);
+        
         return Inertia::render('billing/billing', [
-            'bills' => Billing::with('meter.customer')->latest()->paginate(10),
+            'bills' => $bills,
             'meters' => Meter::with('customer')->get(),
         ]);
     }

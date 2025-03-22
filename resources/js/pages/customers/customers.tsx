@@ -4,8 +4,9 @@ import { type BreadcrumbItem } from "@/types";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Trash, PlusCircle } from "lucide-react";
-import Table from "@/components/table";
+import { Pencil, Trash, PlusCircle, EllipsisVertical } from "lucide-react";
+import { DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenu } from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/table";
 import Modal from "@/components/ui/modal";
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -22,6 +23,9 @@ export default function Customers({customers}) {
     const [search, setSearch] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [editCustomer, setEditCustomer] = useState(null);
+    const filteredCustomers = customers.data.filter((c) =>
+        c.name.toLowerCase().includes(search.toLowerCase())
+    );
 
     const handleDelete = (id: number) => {
         if (confirm("Are you sure you want to delete this customer?")) {
@@ -69,38 +73,48 @@ export default function Customers({customers}) {
                     </div>
                 </div>
 
-                <Table
-                    headers={["ID", "Name", "Email", "Phone", "Actions"]}
-                    data={customers.data
-                        .filter((c) =>
-                            c.name.toLowerCase().includes(search.toLowerCase())
-                        )
-                        .map((customer) => [
-                            customer.id,
-                            customer.name,
-                            customer.email,
-                            customer.phone,
-                            <div key={customer.id} className="flex gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
+                <Table>
+                    <TableHead>
+                        <TableRow>
+                        {['ID', 'Name', 'Email', 'Phone', 'Actions'].map((header) => (
+                            <TableCell key={header} as="th" className="text-left font-medium">
+                            {header}
+                            </TableCell>
+                        ))}
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {filteredCustomers.map((customer) => (
+                        <TableRow key={customer.id}>
+                            <TableCell>{customer.id}</TableCell>
+                            <TableCell>{customer.name}</TableCell>
+                            <TableCell>{customer.email}</TableCell>
+                            <TableCell>{customer.phone}</TableCell>                            
+                            <TableCell>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger>
+                                <EllipsisVertical size={16} />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                <DropdownMenuItem onClick={() => console.log('View', customer.id)}>
+                                    View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
                                         setEditCustomer(customer);
                                         setShowModal(true);
-                                    }}
-                                >
-                                    <Pencil size={16} />
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => handleDelete(customer.id)}
-                                >
-                                    <Trash size={16} />
-                                </Button>
-                            </div>,
-                        ])}
-                />
+                                    }}>
+                                    <Pencil size={16} /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleDelete(customer.id)}>
+                                    <Trash size={16} /> Delete
+                                </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            </TableCell>
+                        </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
 
                 {/* Pagination */}
                 <div className="mt-4 flex justify-center gap-2">

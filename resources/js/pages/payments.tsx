@@ -126,7 +126,7 @@ export default function Payments() {
                             </h2>
                             <Input
                                 type="text"
-                                name="customer_id"
+                                name="meter_id"
                                 placeholder="Customer ID"
                                 defaultValue={editPayment?.customer_id || ""}
                                 required
