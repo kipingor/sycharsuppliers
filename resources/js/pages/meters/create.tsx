@@ -5,18 +5,18 @@ import { Button } from "@/components/ui/button";
 import { FormEvent } from "react";
 import { type BreadcrumbItem } from "@/types";
 
-interface Customer {
+interface Resident {
     id: number;
     name: string;
 }
 
 interface CreateMeterProps {
-    customers: Customer[];
+    residents: Resident[];
 }
 
-const CreateMeter = ({ customers }: CreateMeterProps) => {
+const CreateMeter = ({ residents }: CreateMeterProps) => {
     const { data, setData, post, processing, errors } = useForm({
-        customer_id: "",
+        resident_id: "",
         meter_number: "",
         location: "",
         installation_date: "",
@@ -42,21 +42,21 @@ const CreateMeter = ({ customers }: CreateMeterProps) => {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium">Customer</label>
+                        <label className="block text-sm font-medium">Resident</label>
                         <select
                             className="w-full p-2 border rounded-md"
-                            value={data.customer_id}
-                            onChange={(e) => setData("customer_id", e.target.value)}
+                            value={data.resident_id}
+                            onChange={(e) => setData("resident_id", e.target.value)}
                             required
                         >
-                            <option value="">Select a Customer</option>
-                            {customers.map((customer) => (
-                                <option key={customer.id} value={customer.id}>
-                                    {customer.name}
+                            <option value="">Select a Resident</option>
+                            {residents.map((resident) => (
+                                <option key={resident.id} value={resident.id}>
+                                    {resident.name}
                                 </option>
                             ))}
                         </select>
-                        {errors.customer_id && <p className="text-red-500 text-sm">{errors.customer_id}</p>}
+                        {errors.resident_id && <p className="text-red-500 text-sm">{errors.resident_id}</p>}
                     </div>
 
                     <div>

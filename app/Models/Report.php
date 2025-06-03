@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Report extends Model
 {
     protected $fillable = [
-        'customer_id',
+        'resident_id',
         'report_type',
         'generated_at',
         'file_path',
@@ -20,11 +20,11 @@ class Report extends Model
     ];
 
     /**
-     * Get the customer associated with the report.
+     * Get the resident associated with the report.
      */
-    public function customer(): BelongsTo
+    public function resident(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Resident::class);
     }
 
     /**

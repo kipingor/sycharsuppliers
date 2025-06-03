@@ -11,7 +11,7 @@ class StorePaymentRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -22,7 +22,12 @@ class StorePaymentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'meter_id' => ['required', 'exists:meters,id'],
+            'amount' => ['required', 'numeric', 'min:0'],
+            'method' => ['required', 'string', 'in:M-Pesa,Bank Transfer,Cash'],
+            'transaction_id' => ['required', 'string'],
+            'payment_date' => ['required', 'date'],
+            'status' => ['required', 'string', 'in:completed,pending,failed'],
         ];
     }
 }

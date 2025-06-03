@@ -27,8 +27,8 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
-        title: 'Customer',
-        url: '/customers',
+        title: 'Resident',
+        url: '/residents',
         icon: LayoutGrid,
     },
 ];

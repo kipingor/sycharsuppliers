@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('payments', function (Blueprint $table) {
             $table->id();            
-            $table->foreignId('billing_id')->constrained()->onDelete('cascade');
+            $table->foreignId('meter_id')->constrained()->onDelete('cascade');
             $table->date('payment_date')->nullable();
             $table->decimal('amount', 10, 2);
             $table->enum('method', ['M-Pesa', 'Bank Transfer', 'Cash']);

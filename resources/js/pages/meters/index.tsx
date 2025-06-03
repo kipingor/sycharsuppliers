@@ -11,7 +11,7 @@ interface Meter {
     location: string;
     installation_date: string;
     status: boolean;
-    customer: { name: string };
+    resident: { name: string };
 }
 
 interface MetersPageProps {
@@ -54,7 +54,7 @@ export default function IndexMeters() {
                         <thead>
                             <tr className="bg-gray-100">
                                 <th className="p-2 border border-gray-200">Meter Number</th>
-                                <th className="p-2 border border-gray-200">Customer</th>
+                                <th className="p-2 border border-gray-200">Resident</th>
                                 <th className="p-2 border border-gray-200">Location</th>
                                 <th className="p-2 border border-gray-200">Installation Date</th>
                                 <th className="p-2 border border-gray-200">Status</th>
@@ -69,7 +69,7 @@ export default function IndexMeters() {
                                 .map((meter) => (
                                     <tr key={meter.id} className="hover:bg-gray-50">
                                         <td className="p-2 border border-gray-200">{meter.meter_number}</td>
-                                        <td className="p-2 border border-gray-200">{meter.customer.name}</td>
+                                        <td className="p-2 border border-gray-200">{meter.resident.name}</td>
                                         <td className="p-2 border border-gray-200">{meter.location || "-"}</td>
                                         <td className="p-2 border border-gray-200">{meter.installation_date}</td>
                                         <td className={`p-2 border border-gray-200 font-semibold ${meter.status ? "text-green-600" : "text-red-600"}`}>

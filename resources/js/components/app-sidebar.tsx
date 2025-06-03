@@ -13,14 +13,14 @@ const mainNavItems: NavItem[] = [
         url: '/dashboard',
         icon: LayoutGrid,
     },
+    // {
+    //     title: 'Billing',
+    //     url: '/billing',
+    //     icon: ReceiptPoundSterling,
+    // },
     {
-        title: 'Billing',
-        url: '/billing',
-        icon: ReceiptPoundSterling,
-    },
-    {
-        title: 'Customer',
-        url: '/customers',
+        title: 'Resident',
+        url: '/residents',
         icon: Users,
     },
     {

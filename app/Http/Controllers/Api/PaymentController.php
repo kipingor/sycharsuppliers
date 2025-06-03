@@ -9,18 +9,18 @@ class PaymentController extends Controller
 {
     public function index()
     {
-        return Payment::with('customer', 'bill')->paginate(10);
+        return Payment::with('resident', 'bill')->paginate(10);
     }
 
     public function show($id)
     {
-        return Payment::with('customer', 'bill')->findOrFail($id);
+        return Payment::with('resident', 'bill')->findOrFail($id);
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'customer_id' => 'required|exists:customers,id',
+            'resident_id' => 'required|exists:residents,id',
             'bill_id' => 'nullable|exists:billings,id',
             'amount' => 'required|numeric|min:0',
             'method' => 'required|string',

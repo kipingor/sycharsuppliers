@@ -14,6 +14,16 @@ class MeterResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return parent::toArray($request);
+        return [
+            'id' => $this->id,
+            'meter_name' => $this->meter_name,
+            'meter_number' => $this->meter_number,
+            'location' => $this->location,
+            'status' => $this->status,
+            'type' => $this->type,
+            'installation_date' => $this->installation_date,
+            'resident' => new ResidentResource($this->whenLoaded('resident')),
+            'billings' => BillingResource::collection($this->whenLoaded('billings')),
+        ];
     }
 }

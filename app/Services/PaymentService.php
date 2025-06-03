@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\Payment;
 use App\Models\Billing;
-use App\Models\Customer;
+use App\Models\Resident;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Exception;
@@ -12,13 +12,13 @@ use Exception;
 class PaymentService
 {
     /**
-     * Process a new payment for a customer.
+     * Process a new payment for a resident.
      */
-    public function processPayment(Customer $customer, float $amount, string $method, ?string $transactionId = null): Payment
+    public function processPayment(Resident $resident, float $amount, string $method, ?string $transactionId = null): Payment
     {
         try {
             $payment = Payment::create([
-                'customer_id' => $customer->id,
+                'resident_id' => $resident->id,
                 'amount' => $amount,
                 'method' => $method,
                 'transaction_id' => $transactionId,
@@ -33,16 +33,16 @@ class PaymentService
     }
 
     /**
-     * Reconcile a payment with the customer's outstanding Billing.
+     * Reconcile a payment with the resident's outstanding Billing.
      */
     public function reconcilePayment(Payment $payment): bool
     {
-        $bill = Billing::where('customer_id', $payment->customer_id)
+        $bill = Billing::where('resident_id', $payment->resident_id)
             ->where('status', 'pending')
             ->first();
 
         if (!$bill) {
-            Log::info("No pending bills for customer ID: {$payment->customer_id}");
+            Log::info("No pending bills for resident ID: {$payment->resident_id}");
             return false;
         }
 
@@ -64,7 +64,7 @@ class PaymentService
     {
         try {
             $payment = Payment::create([
-                'customer_id' => $mpesaData['customer_id'],
+                'resident_id' => $mpesaData['resident_id'],
                 'amount' => $mpesaData['amount'],
                 'method' => 'M-Pesa',
                 'transaction_id' => $mpesaData['transaction_id'],
@@ -87,7 +87,7 @@ class PaymentService
     {
         try {
             $payment = Payment::create([
-                'customer_id' => $bankData['customer_id'],
+                'resident_id' => $bankData['resident_id'],
                 'amount' => $bankData['amount'],
                 'method' => 'Bank Transfer',
                 'transaction_id' => $bankData['reference_number'],
@@ -106,18 +106,18 @@ class PaymentService
     /**
      * Send M-Pesa STK Push for a payment request.
      */
-    public function sendMpesaStkPush(Customer $customer, float $amount): array
+    public function sendMpesaStkPush(Resident $resident, float $amount): array
     {
         try {
             $response = Http::post('https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', [
                 'BusinessShortCode' => env('MPESA_SHORTCODE'),
                 'Password' => base64_encode(env('MPESA_SHORTCODE') . env('MPESA_PASSKEY') . now()->format('YmdHis')),
                 'Timestamp' => now()->format('YmdHis'),
-                'TransactionType' => 'CustomerPayBillOnline',
+                'TransactionType' => 'ResidentPayBillOnline',
                 'Amount' => $amount,
-                'PartyA' => $customer->phone,
+                'PartyA' => $resident->phone,
                 'PartyB' => env('MPESA_SHORTCODE'),
-                'PhoneNumber' => $customer->phone,
+                'PhoneNumber' => $resident->phone,
                 'CallBackURL' => env('MPESA_CALLBACK_URL'),
                 'AccountReference' => 'Water Billing Payment',
                 'TransactionDesc' => 'Water Bill Payment',
@@ -131,11 +131,11 @@ class PaymentService
     }
 
     /**
-     * Get total amount paid by a customer.
+     * Get total amount paid by a resident.
      */
-    public function getTotalPayments(Customer $customer): float
+    public function getTotalPayments(Resident $resident): float
     {
-        return Payment::where('customer_id', $customer->id)
+        return Payment::where('resident_id', $resident->id)
             ->where('status', 'completed')
             ->sum('amount');
     }

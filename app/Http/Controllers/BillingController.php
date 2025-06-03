@@ -8,7 +8,7 @@ use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use App\Models\Billing;
 use App\Models\Meter;
 use App\Models\MeterReading;
-use App\Models\BillingMeterReadingDetail;
+use App\Models\BillingDetail;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\BillingNotification;
 use App\Models\EmailLog;
@@ -23,10 +23,10 @@ class BillingController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Billing::with('meter.customer');
+        $query = Billing::with('meter.resident');
 
         if ($search = $request->input('search')) {
-            $query->whereHas('meter.customer', function ($q) use ($search) {
+            $query->whereHas('meter.resident', function ($q) use ($search) {
                 $q->where('name', 'like', '%' . $search . '%');
             });
         }
@@ -35,7 +35,7 @@ class BillingController extends Controller
         
         return Inertia::render('billing/billing', [
             'bills' => $bills,
-            'meters' => Meter::with('customer')->get(),
+            'meters' => Meter::with('resident')->get(),
         ]);
     }
 
@@ -45,7 +45,7 @@ class BillingController extends Controller
     public function create()
     {
         return Inertia::render('billing/Create', [
-            'meters' => Meter::select('id', 'name')->with('customers')->get(),
+            'meters' => Meter::select('id', 'name')->with('residents')->get(),
         ]);
     }
 
@@ -99,22 +99,24 @@ class BillingController extends Controller
             'status' => 'pending',
         ]);
 
-        BillingMeterReadingDetail::create([
+        BillingDetail::create([
             'billing_id' => $billing->id,
             'previous_reading_value' => $previousValue,
             'current_reading_value' => $request->reading_value,
             'units_used' => $unitsUsed,
         ]);
 
-        return to_route('billing.index')
-        ->with('status', 'Bill created successfully!')
-        ->with('summary', [
-            // 'meter_number' => $meter->meter_number,
-            // 'customer' => $meter->customer->name,
-            'units_used' => $unitsUsed,
-            'amount_due' => $amountDue,
-            'unit_price' => $unitPrice,
-        ]);
+        return redirect()->back();
+
+        // return to_route('billing.index')
+        // ->with('status', 'Bill created successfully!')
+        // ->with('summary', [
+        //     // 'meter_number' => $meter->meter_number,
+        //     // 'resident' => $meter->resident->name,
+        //     'units_used' => $unitsUsed,
+        //     'amount_due' => $amountDue,
+        //     'unit_price' => $unitPrice,
+        // ]);
     }
 
     /**
@@ -131,8 +133,8 @@ class BillingController extends Controller
     public function edit(Billing $billing)
     {
         return Inertia::render('billing/Edit', [
-            'bill' => $billing->load('customer'),
-            'meters' => Meter::select('id', 'name')->with('customers')->get(),
+            'bill' => $billing->load('resident'),
+            'meters' => Meter::select('id', 'name')->with('residents')->get(),
         ]);
     }
 
@@ -158,7 +160,7 @@ class BillingController extends Controller
 
     public function sendBillEmail(Meter $meter, Billing $billing)
     {
-        $email = $meter->customer->company ? $meter->customer->email : $meter->customer->contact_email;
+        $email = $meter->resident->company ? $meter->resident->email : $meter->resident->contact_email;
         $subject = 'Water Bill Notification';
         $content = 'Your bill amount is: ' . $billing->amount_due;
 
@@ -189,5 +191,20 @@ class BillingController extends Controller
         }
 
         return response()->json(['message' => 'Late fees applied']);
+    }
+
+    public function statement(Meter $meter)
+    {
+        $totalDue = $meter->bills->sum('amount');
+        $totalPaid = $meter->bills->sum('paid_amount');
+        $balance = $totalDue - $totalPaid;
+
+        return Inertia::render('Billing/Statement', [
+            'meter' => $meter->load('resident'),
+            'bills' => $meter->bills,
+            'totalDue' => $totalDue,
+            'totalPaid' => $totalPaid,
+            'balance' => $balance,
+        ]);
     }
 }

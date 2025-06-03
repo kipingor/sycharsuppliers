@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Casts\MoneyCast;
 use Carbon\Carbon;
 
 class Payment extends Model
@@ -13,7 +14,7 @@ class Payment extends Model
     use HasFactory;
 
     protected $fillable = [
-        'billing_id',
+        'meter_id',
         'payment_date',
         'amount',
         'method',
@@ -23,22 +24,15 @@ class Payment extends Model
 
     protected $casts = [
         'payment_date' => 'date',
-    ];
+        'amount' => MoneyCast::class,
+    ];   
 
     /**
-     * Get the customer associated with this payment.
+     * Get the Bill Meter.
      */
-    public function customer(): BelongsTo
+    public function meter(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
-    }
-
-    /**
-     * Get the bill associated with this payment.
-     */
-    public function bill(): BelongsTo
-    {
-        return $this->belongsTo(Billing::class);
+        return $this->belongsTo(Meter::class);
     }
 
     /**

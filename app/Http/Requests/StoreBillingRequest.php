@@ -27,8 +27,8 @@ class StoreBillingRequest extends FormRequest
             'reading_value' => [
                 'required',
                 'numeric',
-                function ($attribute, $value, $fail) use ($request) {
-                    $lastReading = MeterReading::where('meter_id', $request->meter_id)
+                function ($attribute, $value, $fail) {
+                    $lastReading = MeterReading::where('meter_id', $this->input('meter_id'))
                         ->latest('reading_date')
                         ->value('reading_value');
     

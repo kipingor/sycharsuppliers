@@ -3,6 +3,12 @@
 namespace App\Http\Middleware;
 
 use Illuminate\Foundation\Inspiring;
+use App\Models\Billing;
+use App\Models\Employee;
+use App\Models\Expense;
+use App\Models\Meter;
+use App\Models\Payment;
+use App\Models\Resident;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
@@ -45,6 +51,26 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
+                // 'permissions' => [
+                //     'billing' => [
+                //         'create' => $request->user()->can('create', Billing::class),
+                //     ],
+                //     'employee' => [
+                //         'create' => $request->user()->can('create', Employee::class),
+                //     ],
+                //     'expense' => [
+                //         'create' => $request->user()->can('create', Expense::class),
+                //     ],
+                //     'meter' => [
+                //         'create' => $request->user()->can('create', Meter::class),
+                //     ],
+                //     'payment' => [
+                //         'create' => $request->user()->can('create', Payment::class),
+                //     ],
+                //     'resident' => [
+                //         'create' => $request->user()->can('create', Resident::class),
+                //     ],
+                // ]
             ],
             'ziggy' => fn (): array => [
                 ...(new Ziggy)->toArray(),

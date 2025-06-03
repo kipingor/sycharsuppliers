@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.1",
+        "capsulescodes/inertia-mailable": "^2.1",
         "inertiajs/inertia-laravel": "^2.0",
         "kreait/firebase-php": "^7.17",
         "laravel/framework": "^12.0",
@@ -19,6 +20,7 @@
         "maatwebsite/excel": "^3.1",
         "owen-it/laravel-auditing": "^14.0",
         "safaricom/mpesa": "^1.0",
+        "spatie/laravel-pdf": "^1.5",
         "spatie/laravel-permission": "^6.16",
         "spatie/laravel-responsecache": "^7.6",
         "tightenco/ziggy": "^2.4",

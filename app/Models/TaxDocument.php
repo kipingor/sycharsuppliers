@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Carbon\Carbon;
 
 class TaxDocument extends Model
@@ -12,7 +13,7 @@ class TaxDocument extends Model
     use HasFactory;
 
     protected $fillable = [
-        'customer_id',
+        'resident_id',
         'document_type',
         'file_path',
         'status',
@@ -25,11 +26,11 @@ class TaxDocument extends Model
     ];
 
     /**
-     * Get the customer associated with the tax document.
+     * Get the resident associated with the tax document.
      */
-    public function customer(): BelongsTo
+    public function resident(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Resident::class);
     }
 
     /**

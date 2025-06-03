@@ -17,7 +17,7 @@ trait HasBills
     }
 
     /**
-     * Generate a new bill for the current customer/meter.
+     * Generate a new bill for the current resident/meter.
      */
     public function generateBill(float $unitPrice = 300): Bill
     {

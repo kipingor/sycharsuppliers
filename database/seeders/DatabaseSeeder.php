@@ -3,13 +3,13 @@
 namespace Database\Seeders;
 
 use App\Models\User;
-use App\Models\Customer;
+use App\Models\Resident;
 use App\Models\Meter;
 use App\Models\Billing;
 use App\Models\Payment;
 use App\Models\MeterReading;
 use App\Models\Employee;
-use App\Models\BillingMeterReadingDetail;
+use App\Models\BillingDetail;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -33,7 +33,7 @@ class DatabaseSeeder extends Seeder
             'email' => 'kipingor@gmail.com',
             'password' => Hash::make('deadenman80'),
             'profile_image' => fake()->imageUrl(200, 200, 'people'),
-        ]);
+        ]);        
 
         // Define roles
         $admin = Role::firstOrCreate(['name' => 'admin']);
@@ -42,7 +42,7 @@ class DatabaseSeeder extends Seeder
 
         // Define permissions
         $permissions = [
-            'manage-users', 'manage-customers', 'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings'
+            'manage-users', 'manage-residents', 'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings'
         ];
 
         foreach ($permissions as $permission) {
@@ -50,62 +50,63 @@ class DatabaseSeeder extends Seeder
         }
 
         // Assign permissions to roles
-        $admin->givePermissionTo(['manage-users', 'manage-customers',  'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings']);
+        $admin->givePermissionTo(['manage-users', 'manage-residents',  'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings']);
         $accountant->givePermissionTo(['view-reports', 'process-payments']);
         $field_officer->givePermissionTo(['record-meter-readings']);
 
         // Assign Admin role to Antony Kipingor
         $adminUser->assignRole($admin);
 
-        // Create 20 customers with meters, readings, bills, and payments
-        Customer::factory(20)->create()->each(function ($customer) {
-            $meter = Meter::factory()->create(['customer_id' => $customer->id]);
+        // Create 20 residents with meters, readings, bills, and payments
+        // Resident::factory(20)->create()->each(function ($resident) {
+        //     $meter = Meter::factory()->create(['resident_id' => $resident->id]);
 
-            $previousReading = 0;
-            // Generate 12 monthly meter readings per meter
-            for ($i = 1; $i <= 12; $i++) {
-                $readingDate = Carbon::now()->subMonths(12 - $i);
+        //     $previousReading = 0;
+        //     // Generate 12 monthly meter readings per meter
+        //     for ($i = 1; $i <= 12; $i++) {
+        //         $readingDate = Carbon::now()->subMonths(12 - $i);
 
-                // Ensure the new reading is greater than the previous one
-                $readingValue = $previousReading + rand(1, 50); // Increase by 1 to 50 units
+        //         // Ensure the new reading is greater than the previous one
+        //         $readingValue = $previousReading + rand(1, 50); // Increase by 1 to 50 units
 
-                $reading = MeterReading::factory()->create([
-                    'meter_id' => $meter->id,
-                    'reading_date' => $readingDate,
-                    'reading_value' => $readingValue,
-                ]);
+        //         $reading = MeterReading::factory()->create([
+        //             'meter_id' => $meter->id,
+        //             'reading_date' => $readingDate,
+        //             'reading_value' => $readingValue,
+        //         ]);
 
-                // $previousReading = MeterReading::where('meter_id', $reading->meter_id)->where('reading_date', '<', $reading->reading_date)->orderBy('reading_date', 'desc')->first()->reading_value ?? 0;
-                $unitsUsed = $readingValue - $previousReading;
+        //         // $previousReading = MeterReading::where('meter_id', $reading->meter_id)->where('reading_date', '<', $reading->reading_date)->orderBy('reading_date', 'desc')->first()->reading_value ?? 0;
+        //         $unitsUsed = $readingValue - $previousReading;
 
-                // Generate a bill after each meter reading
-                $bill = Billing::factory()->create([
-                    'meter_id' => $meter->id,
-                    'amount_due' => $unitsUsed * 300, // Example rate per unit
-                ]);
+        //         // Generate a bill after each meter reading
+        //         $bill = Billing::factory()->create([
+        //             'meter_id' => $meter->id,
+        //             'amount_due' => $unitsUsed * 300, // Example rate per unit
+        //         ]);
                
-                BillingMeterReadingDetail::factory()->create([
-                    'billing_id' => $bill->id,
-                    'previous_reading_value' => $previousReading,
-                    'current_reading_value' => $readingValue,
-                    'units_used' => $unitsUsed,
-                ]);
+        //         BillingDetail::factory()->create([
+        //             'billing_id' => $bill->id,
+        //             'previous_reading_value' => $previousReading,
+        //             'current_reading_value' => $readingValue,
+        //             'units_used' => $unitsUsed,
+        //         ]);
 
-                // Create a payment for some of the bills
-                if (rand(0, 1)) {
-                    $payment = Payment::factory()->create(['billing_id' => $bill->id, 'payment_date' => $readingDate->addDays(rand(1, 15))]);
-                    $payment->status = 'completed';
-                    $payment->save();
-                } else {
-                    $payment = Payment::factory()->create(['billing_id' => $bill->id, 'payment_date' => null]);
-                    $payment->status = 'pending';
-                    $payment->save();
-                }
+        //         // Create a payment for some of the meters
+                 
+        //         if (rand(0, 1)) {
+        //             $payment = Payment::factory()->create(['meter_id' => $meter->id, 'payment_date' => $readingDate->addDays(rand(1, 15))]);
+        //             $payment->status = 'completed';
+        //             $payment->save();
+        //         } else {
+        //             $payment = Payment::factory()->create(['meter_id' => $meter->id, 'payment_date' => null]);
+        //             $payment->status = 'pending';
+        //             $payment->save();
+        //         }
 
-                // Update previous reading for the next iteration
-                $previousReading = $readingValue;
-            }
-        });
+        //         // Update previous reading for the next iteration
+        //         $previousReading = $readingValue;
+        //     }
+        // });
 
         // Create 2 employees with role "field_officer"
         $employees = User::factory(2)->create()->each(function ($user) use ($field_officer) {

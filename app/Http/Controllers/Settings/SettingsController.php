@@ -16,7 +16,7 @@ class SettingsController extends Controller
         return Inertia::render('settings/users', [
             'users' => User::with('roles', 'permissions')->get(),
             'roles' => ['admin', 'accountant', 'field_officer'], // Fetch from DB if dynamic
-            'permissions' => ['manage-users', 'manage-customers', 'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings'], // Fetch from DB if dynamic
+            'permissions' => ['manage-users', 'manage-residents', 'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings'], // Fetch from DB if dynamic
         ]);
     }
 }

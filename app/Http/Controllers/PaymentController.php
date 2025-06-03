@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StorePaymentRequest;
 use App\Http\Requests\UpdatePaymentRequest;
 use App\Models\Payment;
+use App\Models\Meter;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -31,7 +32,24 @@ class PaymentController extends Controller
      */
     public function store(StorePaymentRequest $request)
     {
-        //
+        $payment = Payment::create([
+            'meter_id' => $request->meter_id,
+            'amount' => $request->amount,
+            'method' => $request->method,
+            'transaction_id' => $request->transaction_id,
+            'payment_date' => $request->payment_date,
+            'status' => $request->status,
+        ]);
+
+        // Update the related billing status if needed
+        $meter = Meter::findOrFail($request->meter_id);
+        $billing = $meter->bills()->where('status', 'pending')->first();
+        
+        if ($billing) {
+            $billing->update(['status' => 'paid']);
+        }
+
+        return redirect()->back()->with('status', 'Payment recorded successfully!');
     }
 
     /**

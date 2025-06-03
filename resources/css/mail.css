@@ -1,0 +1,19 @@
+@import "tailwindcss/utilities" source(none);
+@import "tailwindcss/theme";
+
+/*
+   Ensure that only necessary files are sourced to prevent conflicts
+   with other Tailwind CSS styles used in the project.
+*/
+
+/* Potential sources for additional mail-related styles */
+/* @source '../../resources/js/mail'; */
+/* @source '../../resources/ts/mail'; */
+
+@source '../../vendor/capsulescodes/inertia-mailable';
+
+
+body
+{
+    @apply m-0 p-0 relative box-border font-['system-ui'];
+}

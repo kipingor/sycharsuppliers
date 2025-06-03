@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('meters', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('customer_id')->constrained()->onDelete('cascade');
+            $table->foreignId('resident_id')->constrained()->onDelete('cascade');
             $table->string('meter_number')->unique();
             $table->string('meter_name');
             $table->string('location');

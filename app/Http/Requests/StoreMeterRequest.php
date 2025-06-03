@@ -22,11 +22,12 @@ class StoreMeterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'customer_id' => 'required|exists:customers,id',
+            'resident_id' => 'required|exists:residents,id',
             'meter_number' => 'required|string|unique:meters,meter_number',
-            'location' => 'nullable|string|max:255',
+            'meter_name' => 'required|string',
+            'location' => 'nullable|string',
             'installation_date' => 'nullable|date',
-            'status' => 'required|boolean',
+            'status' => 'required|string',
         ];
     }
 }

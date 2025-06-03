@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Billing;
-use App\Models\Customer;
+use App\Models\Resident;
 use App\Models\MeterReading;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -20,22 +20,22 @@ class BillingService
     }
 
     /**
-     * Generate a bill for a customer based on the latest meter reading.
+     * Generate a bill for a resident based on the latest meter reading.
      */
-    public function generateBill(Customer $customer): ?Billnig
+    public function generateBill(Resident $resident): ?Billnig
     {
         try {
-            $latestReading = MeterReading::where('customer_id', $customer->id)
+            $latestReading = MeterReading::where('resident_id', $resident->id)
                 ->latest()
                 ->first();
 
-            $previousReading = MeterReading::where('customer_id', $customer->id)
+            $previousReading = MeterReading::where('resident_id', $resident->id)
                 ->orderBy('created_at', 'desc')
                 ->skip(1)
                 ->first();
 
             if (!$latestReading || !$previousReading) {
-                Log::warning("Insufficient readings for billing. Customer ID: {$customer->id}");
+                Log::warning("Insufficient readings for billing. Resident ID: {$resident->id}");
                 return null;
             }
 
@@ -43,7 +43,7 @@ class BillingService
             $amountDue = $unitsUsed * $this->unitPrice;
 
             return Billing::create([
-                'customer_id' => $customer->id,
+                'resident_id' => $resident->id,
                 'billing_period' => Carbon::now()->format('Y-m'),
                 'units_used' => $unitsUsed,
                 'amount_due' => $amountDue,
@@ -56,21 +56,21 @@ class BillingService
     }
 
     /**
-     * Reconcile a payment with a customer's bill.
+     * Reconcile a payment with a resident's bill.
      */
-    public function reconcilePayment(Customer $customer, float $amountPaid): bool
+    public function reconcilePayment(Resident $resident, float $amountPaid): bool
     {
-        $outstandingBill = Billing::where('customer_id', $customer->id)
+        $outstandingBill = Billing::where('resident_id', $resident->id)
             ->where('status', 'pending')
             ->first();
 
         if (!$outstandingBill) {
-            Log::info("No pending bills for customer ID: {$customer->id}");
+            Log::info("No pending bills for resident ID: {$resident->id}");
             return false;
         }
 
         if ($amountPaid < $outstandingBill->amount_due) {
-            Log::warning("Payment insufficient for customer ID: {$customer->id}");
+            Log::warning("Payment insufficient for resident ID: {$resident->id}");
             return false;
         }
 
@@ -100,16 +100,16 @@ class BillingService
     }
 
     /**
-     * Automatically generate bills for all customers at the start of the month.
+     * Automatically generate bills for all residents at the start of the month.
      */
     public function autoGenerateMonthlyBills(): void
     {
-        $customers = Customer::all();
+        $residents = Resident::all();
 
-        foreach ($customers as $customer) {
-            $this->generateBill($customer);
+        foreach ($residents as $resident) {
+            $this->generateBill($resident);
         }
 
-        Log::info("Monthly billing completed for all customers.");
+        Log::info("Monthly billing completed for all residents.");
     }
 }

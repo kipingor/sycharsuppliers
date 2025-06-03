@@ -29,7 +29,7 @@ class BillingPolicy
      */
     public function create(User $user): bool
     {
-        return false;
+        return $user->role == 'admin';
     }
 
     /**

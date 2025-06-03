@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreMeterRequest;
 use App\Http\Requests\UpdateMeterRequest;
 use App\Models\Meter;
-use App\Models\Customer;
+use App\Models\Resident;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -20,32 +20,31 @@ class MeterController extends Controller
     {
         $search = $request->input('search');
 
-        $meters = Meter::with('customer')
+        $residents = Resident::select('id', 'name')->get();
+
+        $meters = Meter::with('resident', 'bills', 'payments')
             ->with(['meterReadings' => function ($query) {
                 $query->selectRaw('meter_id, max(reading_value) - min(reading_value) as total_units')
                     ->groupBy('meter_id');
             }])
             ->withSum('bills', 'amount_due')
-            ->withSum(['bills as total_paid' => function ($query) {
-                $query->join('payments', 'billings.id', '=', 'payments.billing_id')
-                    ->where('payments.status', 'completed');
-            }], 'payments.amount')
+            ->withSum('payments', 'amount')            
             ->when($search, function ($query, $search) {
                 $query->where('meter_number', 'like', "%{$search}%")
-                    ->orWhereHas('customer', function ($q) use ($search) {
+                    ->orWhereHas('resident', function ($q) use ($search) {
                         $q->where('name', 'like', "%{$search}%");
                     });
             })
             ->paginate(10)
             ->through(function ($meter) {
                 $totalBilled = $meter->bills_sum_amount_due ?? 0;
-                $totalPaid = $meter->total_paid ?? 0;
+                $totalPaid = $meter->payments_sum_amount ?? 0;
                 $balanceDue = $totalBilled - $totalPaid;
 
                 return [
                     'id' => $meter->id,
                     'meter_number' => $meter->meter_number,
-                    'customer' => $meter->customer,
+                    'resident' => $meter->resident,
                     'location' => $meter->location,
                     'total_units' => $meter->meterReadings->first()->total_units ?? 0,
                     'total_billed' => $totalBilled,
@@ -57,6 +56,7 @@ class MeterController extends Controller
 
         return Inertia::render('meters/meters', [
             'meters' => $meters,
+            'residents' => $residents,
         ]);
         
     }
@@ -67,7 +67,7 @@ class MeterController extends Controller
     public function create()
     {
         return Inertia::render('meters/Create', [
-            'customers' => Customer::select('id', 'name')->get(),
+            'residents' => Resident::select('id', 'name')->get(),
         ]);
     }
 
@@ -78,7 +78,9 @@ class MeterController extends Controller
     {
         Meter::create($request->validated());
 
-        return to_route('meters.index')->with('status', 'Meter added successfully!');
+        return redirect()->back()->with('success', 'Meter added successfully!');
+
+        // return to_route('meters.index')->with('status', 'Meter added successfully!');
     }
 
     /**

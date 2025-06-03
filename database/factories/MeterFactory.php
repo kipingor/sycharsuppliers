@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\Models\Customer;
+use App\Models\Resident;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -19,7 +19,7 @@ class MeterFactory extends Factory
     public function definition(): array
     {
         return [
-            'customer_id' => Customer::factory(),
+            'resident_id' => Resident::factory(),
             'meter_name' => $this->faker->name(),
             'meter_number' => strtoupper(Str::random(12)),
             'location' => $this->faker->address(),

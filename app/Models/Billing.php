@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\BillingMeterReadingDetail;
+use App\Models\BillingDetail;
+use App\Casts\MoneyCast;
 use Carbon\Carbon;
 
 class Billing extends Model
@@ -22,7 +23,13 @@ class Billing extends Model
 
 
     protected $casts = [
-        'amount_due' => 'float',
+        // 'amount_due' => 'float',
+        'amount_due' => MoneyCast::class,
+    ];
+
+    protected $appends = [
+        'current_reading', 
+        'previous_reading'
     ];
 
     /**
@@ -33,27 +40,25 @@ class Billing extends Model
         return $this->belongsTo(Meter::class);
     }
 
-    /**
-     * Get the Payments associated with the bill.
-     */
-    public function payments(): HasMany
-    {
-        return $this->hasMany(Payment::class);
-    }
-
     public function details()
     {
-        return $this->hasOne(BillingMeterReadingDetail::class);
+        return $this->hasOne(BillingDetail::class, 'billing_id');
     }
 
     /**
      * Get the latest meter reading for the meter.
      */
-    public function currentReading(): Attribute
+    public function getCurrentReadingAttribute()
     {
-        return Attribute::make(
-            get: fn () => BillingMeterReadingDetail::where('billing_id', $this->id)->latest()->first()?->current_reading_value ?? 0
-        );
+        return $this->details?->current_reading_value ?? 0;
+    }
+
+    /**
+     * Get the latest meter reading for the meter.
+     */
+    public function getPreviousReadingAttribute()
+    {
+        return $this->details?->previous_reading_value ?? 0;
     }
 
     /**

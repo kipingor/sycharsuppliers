@@ -1,6 +1,6 @@
 import { Head, usePage, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { type BreadcrumbItem, type Report } from "@/types";
+import { type BreadcrumbItem } from "@/types";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import Pagination from "@/components/pagination";
 
 interface Report {
     id: number;
-    customer?: {
+    resident?: {
         name: string;
     };
     report_type: string;
@@ -46,7 +46,7 @@ export default function Reports({ reports }: ReportProps) {
     }, 300);
 
     const filteredReports = reports.data.filter((r: any) =>
-        r.customer?.name?.toLowerCase()?.includes(search.toLowerCase())
+        r.resident?.name?.toLowerCase()?.includes(search.toLowerCase())
     );
 
     const handleDownload = async (id: number, format: "pdf" | "excel") => {
@@ -87,7 +87,7 @@ export default function Reports({ reports }: ReportProps) {
                     <TableBody>
                         {filteredReports.map((report) => (
                             <TableRow key={report.id}>
-                                <TableCell>{report.customer.name}</TableCell>
+                                <TableCell>{report.resident.name}</TableCell>
                                 <TableCell>{report.generated_at}</TableCell>
                                 <TableCell>{report.status}</TableCell>
                             </TableRow>

@@ -1,8 +1,9 @@
 import React from 'react';
+import { formatCurrency } from '@/lib/utils';
 
 interface BillProps {
-  customerName: string;
-  customerEmail: string;
+  residentName: string;
+  residentEmail: string;
   billNumber: string;
   billingDate: string;
   meterName: string;
@@ -15,9 +16,10 @@ interface BillProps {
   due: number;
 }
 
+
 const Bill: React.FC<BillProps> = ({
-  customerName,
-  customerEmail,
+  residentName,
+  residentEmail,
   billNumber,
   billingDate,
   meterName,
@@ -41,8 +43,8 @@ const Bill: React.FC<BillProps> = ({
       <div className="mb-6">
         <h2 className="text-xl font-semibold">WATER BILL</h2>
         <div className="text-sm text-gray-600 mt-2">
-          <p><strong>Invoice to:</strong> {customerName}</p>
-          <p>{customerEmail}</p>
+          <p><strong>Invoice to:</strong> {residentName}</p>
+          <p>{residentEmail}</p>
         </div>
         <div className="mt-4">
           <p><strong>Bill Number:</strong> {billNumber}</p>
@@ -67,16 +69,16 @@ const Bill: React.FC<BillProps> = ({
             <td className="px-4 py-2">{previousReading}</td>
             <td className="px-4 py-2">{currentReading}</td>
             <td className="px-4 py-2">{units}</td>
-            <td className="px-4 py-2">KES {pricePerUnit.toFixed(2)}</td>
-            <td className="px-4 py-2">KES {total.toFixed(2)}</td>
+            <td className="px-4 py-2">{formatCurrency(pricePerUnit)}</td>
+            <td className="px-4 py-2">{formatCurrency(total)}</td>
           </tr>
         </tbody>
       </table>
       
       {/* Payments and Due Amount */}
       <div className="mt-6 text-sm">
-        <p><strong>Paid:</strong> KES {paid.toFixed(2)}</p>
-        <p><strong>Due:</strong> KES {due.toFixed(2)}</p>
+        <p><strong>Paid:</strong> {formatCurrency(paid)}</p>
+        <p><strong>Due:</strong> {formatCurrency(due)}</p>
       </div>
       
       {/* Footer */}

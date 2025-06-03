@@ -9,23 +9,23 @@ class ReportController extends Controller
 {
     public function index()
     {
-        return Report::with('customer')->paginate(10);
+        return Report::with('resident')->paginate(10);
     }
 
     public function show($id)
     {
-        return Report::with('customer')->findOrFail($id);
+        return Report::with('resident')->findOrFail($id);
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'customer_id' => 'nullable|exists:customers,id',
+            'resident_id' => 'nullable|exists:residents,id',
             'report_type' => 'required|string',
         ]);
 
         $report = Report::create([
-            'customer_id' => $request->customer_id,
+            'resident_id' => $request->resident_id,
             'report_type' => $request->report_type,
             'status' => 'pending',
             'generated_at' => now(),

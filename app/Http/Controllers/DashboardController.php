@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Auth;
-use App\Models\Customer;
+use App\Models\Resident;
 use App\Models\Meter;
 use App\Models\MeterReading;
 use App\Models\Billing;
@@ -34,18 +34,22 @@ class DashboardController extends Controller
         }
         $endDate = now()->endOfDay();
 
-        $totalCustomers = Customer::count();
+        $totalResidents = Resident::count();
         $activeMeters = Meter::where('status', 'active')->count();
 
         $totalRevenue = Payment::whereBetween('created_at', [$startDate, $endDate])->sum('amount');
         $pendingPayments = Billing::where('status', 'pending')->sum('amount_due');
         $overdueBillsCount = Billing::where('status', 'overdue')->count();
 
-        $monthlyRevenue = Payment::selectRaw('MONTH(created_at) as month, SUM(amount) as total')
-            ->whereBetween('created_at', [$startDate->copy()->subYear(), $endDate])
-            ->groupBy('month')
+        $monthlyRevenue = Payment::selectRaw('MONTH(created_at) as month, YEAR(created_at) as year, SUM(amount) as total')
+            ->whereBetween('created_at', [$startDate->subMonths(11)->startOfMonth(), $endDate->endOfMonth()])
+            ->groupBy('year', 'month')
+            ->orderBy('year')
             ->orderBy('month')
-            ->pluck('total', 'month');
+            ->get()
+            ->mapWithKeys(function ($item) {
+                return [$item->month => $item->total];
+            });
 
         $yearlyConsumption = MeterReading::selectRaw('YEAR(reading_date) as year, SUM(reading_value) as total')
             ->whereBetween('reading_date', [$startDate->copy()->subYears(5), $endDate])
@@ -53,10 +57,10 @@ class DashboardController extends Controller
             ->orderBy('year')
             ->pluck('total', 'year');
 
-        return Inertia::render('dashboard', [
+        $data = [
             'user' => Auth::user(),
             'initialMetrics' => [
-                'totalCustomers' => $totalCustomers,
+                'totalResidents' => $totalResidents,
                 'activeMeters' => $activeMeters,
                 'totalRevenue' => $totalRevenue,
                 'pendingPayments' => $pendingPayments,
@@ -66,6 +70,15 @@ class DashboardController extends Controller
                 'monthlyRevenue' => $monthlyRevenue,
                 'yearlyConsumption' => $yearlyConsumption,
             ]
-        ]);
+        ];
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'metrics' => $data['initialMetrics'],
+                'chartData' => $data['initialChartData']
+            ]);
+        }
+
+        return Inertia::render('dashboard', $data);
     }
 }
