@@ -184,10 +184,12 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
                         title="Pending Payments" 
                         value={formatCurrency(metrics.pendingPayments)}
                     />
+                    {/*
                     <MetricCard 
                         title="Overdue Bills" 
                         value={metrics.overdueBillsCount} 
                     />
+                    */}
                 </div>
                 
                 {/* Charts */}
@@ -224,7 +226,7 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
                     <CardContent className="px-2 sm:p-6">
                         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
                             <BarChart accessibilityLayer data={Object.entries(chartData[activeChart]).map(([key, value]) => ({
-                                name: activeChart === 'monthlyRevenue' ? new Date(2024, parseInt(key) - 1).toLocaleString('default', { month: 'short' }) : key,
+                                name: activeChart === 'monthlyRevenue' ? new Date(new Date().getFullYear(), parseInt(key) - 1).toLocaleString('default', { month: 'short' }) : key,
                                 value: value
                             }))} margin={{
                                 left: 12,

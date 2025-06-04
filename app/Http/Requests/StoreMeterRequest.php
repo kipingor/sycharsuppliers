@@ -27,7 +27,7 @@ class StoreMeterRequest extends FormRequest
             'meter_name' => 'required|string',
             'location' => 'nullable|string',
             'installation_date' => 'nullable|date',
-            'status' => 'required|string',
+            'status' => 'required|in:active,inactive,replaced',
         ];
     }
 }

@@ -106,7 +106,7 @@ class MeterController extends Controller
     {
         $meter->update($request->validated());
 
-        return to_route('meters.index')->with('status', 'Meter updated successfully!');
+        return redirect()->back()->with('success', 'Meter updated successfully!');
     }
 
     /**

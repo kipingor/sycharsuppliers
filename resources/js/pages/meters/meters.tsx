@@ -93,10 +93,7 @@ export default function Meters({ meters, residents }: MeterProps) {
     const { errors } = usePage().props;    
     const [search, setSearch] = useState("");
     const [showMeterModal, setShowMeterModal] = useState(false);
-    const [showBillModal, setShowBillModal] = useState(false);
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [editMeter, setEditMeter] = useState<Meter | null>(null);
-    const [editBill, setEditBill] = useState<Meter | null>(null);
     const [showSlideOver, setShowSlideOver] = useState(false);
     const [selectedMeter, setSelectedMeter] = useState<Meter | null>(null);
     const [billsAndPayments, setBillsAndPayments] = useState<any[]>([]);
@@ -105,12 +102,6 @@ export default function Meters({ meters, residents }: MeterProps) {
     const [showPaymentDialog, setShowPaymentDialog] = useState(false);
     const [selectedMeterForPayment, setSelectedMeterForPayment] = useState<Meter | null>(null);
     const [showAddResidentModal, setShowAddResidentModal] = useState(false);
-    const [residentsList, setResidentsList] = useState<Resident[]>(residents?.data || []);
-
-    useEffect(() => {
-        console.log('Residents data updated:', residents?.data);
-        setResidentsList(residents?.data || []);
-    }, [residents]);
 
     const handleSearch = debounce((query: string) => {
         router.reload({
@@ -131,10 +122,38 @@ export default function Meters({ meters, residents }: MeterProps) {
     };
 
     const handleSave = (formData: FormData) => {
+        // Add debugging to see what's being sent
+        console.log('Form data being submitted:', Object.fromEntries(formData.entries()));
+
         if (editMeter) {
-            router.put(`/meters/${editMeter.id}`, formData);
+            formData.append('_method', 'PUT');
+        
+            router.post(`/meters/${editMeter.id}`, formData, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowMeterModal(false);
+                    setEditMeter(null);
+                    // Optional: show success message
+                    toast("Meter updated successfully!");
+                },
+                onError: (errors) => {
+                    console.error("Update errors:", errors);
+                    toast("Failed to update meter. Please check the form.");
+                }
+            });
         } else {
-            router.post("/meters", formData);
+            router.post("/meters", formData, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowMeterModal(false);
+                    setEditMeter(null);
+                    toast("Meter created successfully!");
+                },
+                onError: (errors) => {
+                    console.error("Creation errors:", errors);
+                    toast("Failed to create meter. Please check the form.");
+                }
+            });
         }
     
         setShowMeterModal(false);
@@ -217,7 +236,7 @@ export default function Meters({ meters, residents }: MeterProps) {
             preserveScroll: true,
             onSuccess: () => {
                 // Reload the page to get fresh data including the new resident
-                router.reload({ only: ['residents'] });
+                router.reload({ only: ['residents', 'meters'] });
                 setShowAddResidentModal(false);
             },
             onError: (errors) => {

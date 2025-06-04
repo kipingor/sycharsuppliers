@@ -24,6 +24,9 @@ interface Meter {
     status: 'active' | 'inactive' | 'replaced';
     installation_date: string;
     resident_id?: number;
+    resident?: {
+        name: string;
+    }
 }
 
 interface MeterModalProps {
@@ -31,7 +34,9 @@ interface MeterModalProps {
     onClose: () => void;
     onSubmit: (formData: FormData) => void;
     editMeter: Meter | null;
-    residents: Resident[];
+    residents: {
+        data: Resident[];
+    } | Resident[]; // Handle both possible structures
     onAddResident: () => void; // Function to open "Add Resident" modal
 }
 
@@ -46,9 +51,11 @@ export default function MeterModal({
     const [meterNumber, setMeterNumber] = useState("");
     const [meterName, setMeterName] = useState("");
     const [location, setLocation] = useState("");
-    const [status, setStatus] = useState("active");
+    const [status, setStatus] = useState<'active' | 'inactive' | 'replaced'>("active");
     const [installationDate, setInstallationDate] = useState("");
-    const [residentId, setResidentId] = useState<string>('');
+    const [residentId, setResidentId] = useState<string>("");
+
+    const residentsData = Array.isArray(residents) ? residents : residents?.data || [];
 
     useEffect(() => {
         if (!editMeter) {
@@ -58,16 +65,16 @@ export default function MeterModal({
             setLocation("");
             setStatus("active");
             setInstallationDate("");
-            setResidentId(null);
+            setResidentId("");
         } else {
-            setMeterNumber(editMeter.meter_number);
-            setMeterName(editMeter.meter_name);
-            setLocation(editMeter.location);
-            setStatus(editMeter.status);
-            setInstallationDate(editMeter.installation_date);
-            setResidentId(editMeter.resident_id?.toString() || null);
+            setMeterNumber(editMeter.meter_number || "");
+            setMeterName(editMeter.meter_name || "");
+            setLocation(editMeter.location || "");
+            setStatus(editMeter.status || "active");
+            setInstallationDate(editMeter.installation_date || "");
+            setResidentId(editMeter.resident_id?.toString() || "");
         }
-    }, [editMeter]);
+    }, [editMeter, show]);
 
     if (!show) return null;
 
@@ -83,7 +90,21 @@ export default function MeterModal({
                     formData.append("location", location);
                     formData.append("status", status);
                     formData.append("installation_date", installationDate);
-                    if (residentId) formData.append("resident_id", residentId);
+                    if (residentId && residentId !== "") {
+                        formData.append("resident_id", residentId);
+                    }
+
+                    // Debug logging
+                    console.log('Submitting form with data:', {
+                        meter_number: meterNumber,
+                        meter_name: meterName,
+                        location: location,
+                        status: status,
+                        installation_date: installationDate,
+                        resident_id: residentId,
+                        isEdit: !!editMeter,
+                        editMeterId: editMeter?.id
+                    });
 
                     onSubmit(formData); // You may refine the typing if needed
                 }}
@@ -99,21 +120,27 @@ export default function MeterModal({
                         <span>{editMeter?.resident?.name || 'No Resident Assigned'}</span>
                     ) : (
                         <>
-                        <label className="block mb-1 font-medium">Select Resident</label>
-                        <div className="flex items-center gap-2">
-                        <Select value={residentId ?? ''} onValueChange={setResidentId} required>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select Resident" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {residents?.map((resident) => (
-                                        <SelectItem key={resident.id} value={resident.id.toString()}>
-                                            {resident.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Button type="button" onClick={onAddResident}>+ Add</Button>
+                            <label className="block mb-1 font-medium">Select Resident</label>
+                            <div className="flex items-center gap-2">
+                                <Select 
+                                    value={residentId} 
+                                    onValueChange={(value) => setResidentId(value || "")}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select Resident" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="No Resident">No Resident</SelectItem>
+                                        {residentsData.map((resident) => (
+                                            <SelectItem key={resident.id} value={resident.id.toString()}>
+                                                {resident.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button type="button" onClick={onAddResident} variant="outline">
+                                    + Add
+                                </Button>
                             </div>
                         </>
                     )}                        
@@ -121,34 +148,43 @@ export default function MeterModal({
                 </div>
 
                 {/* Meter Number */}
-                <Input
-                    type="text"
-                    name="meter_number"
-                    placeholder="Meter Number"
-                    value={meterNumber}
-                    onChange={(e) => setMeterNumber(e.target.value)}
-                    required
-                />
+                <div>
+                    <label className="block mb-1 font-medium">Meter Number</label>
+                    <Input
+                        type="text"
+                        name="meter_number"
+                        placeholder="Meter Number"
+                        value={meterNumber}
+                        onChange={(e) => setMeterNumber(e.target.value)}
+                        required
+                    />
+                </div>
 
                 {/* Meter Name */}
-                <Input
-                    type="text"
-                    name="meter_name"
-                    placeholder="Meter Name"
-                    value={meterName}
-                    onChange={(e) => setMeterName(e.target.value)}
-                    required
-                />
+                <div>
+                    <label className="block mb-1 font-medium">Meter Name</label>
+                    <Input
+                        type="text"
+                        name="meter_name"
+                        placeholder="Meter Name"
+                        value={meterName}
+                        onChange={(e) => setMeterName(e.target.value)}
+                        required
+                    />
+                </div>
 
                 {/* Location */}
-                <Input
-                    type="text"
-                    name="location"
-                    placeholder="Location"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    required
-                />
+                <div>
+                    <label className="block mb-1 font-medium">Location</label>
+                    <Input
+                        type="text"
+                        name="location"
+                        placeholder="Location"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        required
+                    />
+                </div>
 
                 {/* Installation Date */}
                 <div>
@@ -163,16 +199,19 @@ export default function MeterModal({
                 </div>
 
                 {/* Status */}
-                <select
-                    name="status"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full p-2 border rounded"
-                >
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                    <option value="replaced">Replaced</option>
-                </select>
+                <div>
+                    <label className="block mb-1 font-medium">Status</label>
+                    <Select value={status} onValueChange={(value) => setStatus(value as 'active' | 'inactive' | 'replaced')}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                            <SelectItem value="replaced">Replaced</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
                 {/* Action Buttons */}
                 <div className="flex justify-end gap-2">

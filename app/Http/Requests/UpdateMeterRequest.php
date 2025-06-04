@@ -22,11 +22,11 @@ class UpdateMeterRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'resident_id' => 'required|exists:residents,id',
             'meter_number' => 'required|string|unique:meters,meter_number,' . $this->meter->id,
+            'meter_name' => 'required|string',
             'location' => 'nullable|string|max:255',
             'installation_date' => 'nullable|date',
-            'status' => 'required|boolean',
+            'status' => 'required|in:active,inactive,replaced',
         ];
     }
 }
