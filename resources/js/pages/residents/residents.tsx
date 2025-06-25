@@ -7,6 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Pencil, Trash, PlusCircle, EllipsisVertical } from "lucide-react";
 import { DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/table";
+import AddResidentModal from "@/components/residents/add-residents-modal";
+import { ResidentFormData } from "@/components/residents/add-residents-modal";
+import { toast } from "sonner";
 import Modal from "@/components/ui/modal";
 
 interface Resident {
@@ -37,6 +40,7 @@ export default function Residents({ residents }: ResidentsProps) {
     const [search, setSearch] = useState("");
     const [showModal, setShowModal] = useState(false);
     const [editResident, setEditResident] = useState<Resident | null>(null);
+    const [showAddResidentModal, setShowAddResidentModal] = useState(false);
     const filteredResidents = residents.data.filter((c) =>
         c.name.toLowerCase().includes(search.toLowerCase())
     );
@@ -61,6 +65,42 @@ export default function Residents({ residents }: ResidentsProps) {
         setEditResident(null);
     };
 
+    const handleAddResident = (data: ResidentFormData) => {
+        const formData = new FormData();
+        Object.entries(data).forEach(([key, value]) => {
+            formData.append(key, value);
+        });
+
+        if (editResident) {
+            formData.append('_method', 'PUT');
+
+            router.post(`/residents/${editResident.id}`, formData, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setShowAddResidentModal(false);
+                    setEditResident(null);
+                    toast("Resident updated successfully!");
+                },
+                onError: (errors) => {
+                    console.error("Update errors: ", errors);
+                    toast("Failed to update the resident, please check the form");
+                }
+            });
+        } else {
+            router.post('/residents', formData, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    // Reload the page to get fresh data including the new resident
+                    router.reload({ only: ['residents'] });
+                    setShowAddResidentModal(false);
+                },
+                onError: (errors) => {
+                    console.error("Validation errors:", errors);
+                }
+            });
+        }
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Residents" />
@@ -77,7 +117,7 @@ export default function Residents({ residents }: ResidentsProps) {
                         <Button
                             onClick={() => {
                                 setEditResident(null);
-                                setShowModal(true);
+                                setShowAddResidentModal(true);
                             }}
                             className="flex items-center gap-2"
                         >
@@ -115,7 +155,7 @@ export default function Residents({ residents }: ResidentsProps) {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => {
                                         setEditResident(resident);
-                                        setShowModal(true);
+                                        setShowAddResidentModal(true);
                                     }}>
                                     <Pencil size={16} /> Edit
                                 </DropdownMenuItem>
@@ -144,46 +184,12 @@ export default function Residents({ residents }: ResidentsProps) {
                 </div>
 
                 {/* Add/Edit Resident Modal */}
-                {showModal && (
-                    <Modal onClose={() => setShowModal(false)}>
-                        <form onSubmit={handleSave} className="p-6 space-y-4">
-                            <h2 className="text-xl font-bold">
-                                {editResident ? "Edit Resident" : "Add Resident"}
-                            </h2>
-                            <Input
-                                type="text"
-                                name="name"
-                                placeholder="Name"
-                                defaultValue={editResident?.name || ""}
-                                required
-                            />
-                            <Input
-                                type="email"
-                                name="email"
-                                placeholder="Email"
-                                defaultValue={editResident?.email || ""}
-                                required
-                            />
-                            <Input
-                                type="text"
-                                name="phone"
-                                placeholder="Phone"
-                                defaultValue={editResident?.phone || ""}
-                                required
-                            />
-                            <div className="flex justify-end gap-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={() => setShowModal(false)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button type="submit">Save</Button>
-                            </div>
-                        </form>
-                    </Modal>
-                )}
+                <AddResidentModal
+                    show={showAddResidentModal}
+                    onClose={() => setShowAddResidentModal(false)}
+                    onSubmit={handleAddResident}
+                    initialData={editResident ?? undefined} //Pass resident data when editing
+                />
             </div>
         </AppLayout>
     );

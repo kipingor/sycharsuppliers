@@ -1,12 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+
+interface Resident {
+    id: number;
+    name: string;
+    email: string;
+    phone: number;
+}
+
 
 interface AddResidentModalProps {
     show: boolean;
     onClose: () => void;
     onSubmit: (formData: ResidentFormData) => void;
+    initialData?: Partial<ResidentFormData>;
 }
 
 export interface ResidentFormData {
@@ -16,13 +25,32 @@ export interface ResidentFormData {
     address: string;
 }
 
-export default function AddResidentModal({ show, onClose, onSubmit }: AddResidentModalProps) {
+export default function AddResidentModal({ show, onClose, onSubmit, initialData }: AddResidentModalProps) {
     const [formData, setFormData] = useState<ResidentFormData>({
         name: '',
         email: '',
         phone: '',
         address: '',
     });
+
+    useEffect(() => {
+        if (show && initialData) {
+            setFormData({
+                name: initialData.name || '',
+                email: initialData.email || '',
+                phone: initialData.phone || '',
+                address: initialData.address || '',
+            });
+        } else if (show) {
+            // reset if adding new
+            setFormData({
+                name: '',
+                email: '',
+                phone: '',
+                address: '',
+            });
+        }
+    }, [show, initialData]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -40,7 +68,9 @@ export default function AddResidentModal({ show, onClose, onSubmit }: AddResiden
     return (
         <Modal onClose={onClose}>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <h2 className="text-xl font-bold">Add New Resident</h2>
+                <h2 className="text-xl font-bold">
+                    {initialData ? "Edit Resident" : "Add New Resident"}
+                </h2>
 
                 <Input
                     name="name"

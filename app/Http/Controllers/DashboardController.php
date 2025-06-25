@@ -55,7 +55,10 @@ class DashboardController extends Controller
             ->whereBetween('reading_date', [$startDate->copy()->subYears(5), $endDate])
             ->groupBy('year')
             ->orderBy('year')
-            ->pluck('total', 'year');
+            ->get()
+            ->mapWithKeys(function ($item) {
+                return [$item->year => $item->total];
+            });
 
         $data = [
             'user' => Auth::user(),

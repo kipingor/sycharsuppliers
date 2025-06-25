@@ -137,7 +137,7 @@ export default function Meters({ meters, residents }: MeterProps) {
                     toast("Meter updated successfully!");
                 },
                 onError: (errors) => {
-                    console.error("Update errors:", errors);
+                    console.error("Update errors: ", errors);
                     toast("Failed to update meter. Please check the form.");
                 }
             });
@@ -159,22 +159,6 @@ export default function Meters({ meters, residents }: MeterProps) {
         setShowMeterModal(false);
         setEditMeter(null);
     };
-    
-
-    // const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
-    //     e.preventDefault();
-    //     const formData = new FormData(e.currentTarget);
-
-    //     if (editMeter) {
-    //         router.put(`/meters/${editMeter.id}`, formData);
-    //     } else {
-    //         console.log(formData);
-    //         router.post("/meters", formData);
-    //     }
-
-    //     setShowMeterModal(false);
-    //     setEditMeter(null);
-    // };
 
     const handleView = async (meter: Meter) => {
         setSelectedMeter(meter);
@@ -272,7 +256,17 @@ export default function Meters({ meters, residents }: MeterProps) {
                         >
                             <PlusCircle size={18} />
                             Add Meter
-                        </Button>                        
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                window.open("/api/meters/download-statements", "_blank");
+                            }}
+                            className="flex items-center gap-2"
+                        >
+                            <SendHorizontal size={16} />
+                            Download All Statements
+                        </Button>
                     </div>
                 </div>
 
@@ -354,9 +348,9 @@ export default function Meters({ meters, residents }: MeterProps) {
                 />
 
                 <AddResidentModal
-                show={showAddResidentModal}
-                onClose={() => setShowAddResidentModal(false)}
-                onSubmit={handleAddResident}
+                    show={showAddResidentModal}
+                    onClose={() => setShowAddResidentModal(false)}
+                    onSubmit={handleAddResident}
                 />
 
                 {/* SlideOver Component */}

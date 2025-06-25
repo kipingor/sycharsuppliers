@@ -125,8 +125,8 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
 
     const total = React.useMemo(
         () => ({
-            monthly: Object.values(chartData.monthlyRevenue).reduce((acc, curr) => acc + curr, 0),
-            yearly: Object.values(chartData.yearlyConsumption).reduce((acc, curr) => acc + curr, 0),
+            monthlyRevenue: Object.values(chartData.monthlyRevenue).reduce((acc, curr) => acc + curr, 0),
+            yearlyConsumption: 0, //Object.values(chartData.yearlyConsumption).reduce((acc, curr) => acc + curr, 0),
         }),
         [chartData]
     );
@@ -216,7 +216,10 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
                                             {chartConfig[chart].label}
                                         </span>
                                         <span className="text-lg font-bold leading-none sm:text-3xl">
-                                            {total[key as keyof typeof total]}
+                                            {chart === 'monthlyRevenue' 
+                                                ? formatCurrency(total[key as keyof typeof total] || 0)
+                                                : total[key as keyof typeof total] || 0
+                                            }
                                         </span>
                                     </button>
                                 )
@@ -226,7 +229,9 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
                     <CardContent className="px-2 sm:p-6">
                         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
                             <BarChart accessibilityLayer data={Object.entries(chartData[activeChart]).map(([key, value]) => ({
-                                name: activeChart === 'monthlyRevenue' ? new Date(new Date().getFullYear(), parseInt(key) - 1).toLocaleString('default', { month: 'short' }) : key,
+                                name: activeChart === 'monthlyRevenue' 
+                                    ? new Date(new Date().getFullYear(), parseInt(key) - 1).toLocaleString('default', { month: 'short' })
+                                    : key,
                                 value: value
                             }))} margin={{
                                 left: 12,
@@ -247,7 +252,10 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
                                         <ChartTooltipContent
                                             className='w-[150px]'
                                             nameKey='value'
-                                            labelFormatter={(value) => formatCurrency(value)}
+                                            labelFormatter={(value) => activeChart === 'monthlyRevenue' 
+                                                ? formatCurrency(value)
+                                                : value.toString()
+                                            }
                                         />
                                     }
                                 />

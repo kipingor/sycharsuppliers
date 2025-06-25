@@ -13,10 +13,13 @@ use App\Services\EmailService;
 use App\Mail\BillingStatement;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\RedirectResponse;
-// use Spatie\LaravelPdf\Support\pdf;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Response;
 use Barryvdh\DomPDF\Facade\Pdf;
+use setasign\Fpdi\Fpdi; // Optional if merging PDFs
+use setasign\Fpdf\Fpdf;
 
 class MeterController extends Controller
 {
@@ -80,6 +83,71 @@ class MeterController extends Controller
         Mail::to($resident->email)->send($email);
 
         return Redirect::back()->with('status', 'Statement sent successfully!');
+    }
+
+    public function downloadAllStatements()
+    {
+        $meters = Meter::with('resident')->get();
+        $pdfs = [];
+
+        foreach ($meters as $meter) {
+            if (!$meter->resident || !$meter->resident->email) {
+                continue; // Skip if no resident/email
+            }
+
+            $startDate = now()->startOfYear()->toDateString();
+            $endDate = now()->toDateString();
+
+            $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->sum('amount_due')) -
+                            ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
+
+            $transactions = $meter->bills()
+                                ->whereBetween('created_at', [$startDate, $endDate])
+                                ->get()
+                                ->merge(
+                                    $meter->payments()
+                                        ->whereBetween('created_at', [$startDate, $endDate])
+                                        ->orderBy('created_at', 'desc')
+                                        ->get()
+                                );
+
+            $pdf = Pdf::loadView('pdf.statement', [
+                'transactions' => $transactions,
+                'carryForward' => $carryForward,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+                'resident' => $meter->resident,
+            ]);
+
+            $pdfs[] = $pdf->output(); // Add raw PDF string
+        }
+
+        if (empty($pdfs)) {
+            return back()->with('error', 'No statements available to download.');
+        }
+
+        // Combine all PDFs using FPDI
+        $combinedPdf = new Fpdi();
+
+        foreach ($pdfs as $rawPdf) {
+            $tmpPath = storage_path('app/tmp_statement.pdf');
+            file_put_contents($tmpPath, $rawPdf);
+
+            $pageCount = $combinedPdf->setSourceFile($tmpPath);
+            for ($i = 1; $i <= $pageCount; $i++) {
+                $tpl = $combinedPdf->importPage($i);
+                $size = $combinedPdf->getTemplateSize($tpl);
+                $combinedPdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
+                $combinedPdf->useTemplate($tpl);
+            }
+
+            unlink($tmpPath);
+        }
+
+        $finalPdfPath = storage_path('app/all-meter-statements.pdf');
+        $combinedPdf->Output($finalPdfPath, 'F');
+
+        return response()->download($finalPdfPath, 'all-meter-statements.pdf')->deleteFileAfterSend(true);
     }
 
     public function show($id)

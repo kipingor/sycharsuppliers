@@ -13,3 +13,5 @@ Route::get('/meter-readings/last/{meter}', [MeterReadingController::class, 'getL
 Route::get('/meters/{meter}/bills-payments', [MeterController::class, 'billPayments']);
 Route::post('/meters/{meter}/send-statement', [MeterController::class, 'sendStatement']);
 Route::get('/meters/reading-list', [MeterController::class, 'readingList']);
+Route::get('/meters/download-statements', [MeterController::class, 'downloadAllStatements']);
+
