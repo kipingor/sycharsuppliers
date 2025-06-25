@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('meter_id')->constrained()->onDelete('cascade');
             $table->decimal('amount_due', 10, 2);
-            $table->enum('status', ['pending', 'paid', 'unpaid', 'overdue', 'partially paid', 'void'])->default('pending');
+            $table->enum('status', ['pending', 'paid', 'write off', 'overdue', 'partially paid', 'void'])->default('pending');
             $table->timestamps();
             $table->softDeletes();
         });

@@ -101,6 +101,14 @@ class MigrateOldData extends Command
 
             $bills = DB::connection('old')->table('bills')->get();
 
+            $statusMap = [
+                1 => 'pending',
+                2 => 'paid',
+                3 => 'write off',
+                4 => 'void',
+                5 => 'partially paid',
+            ];
+
             // Build a map of customer_id → meter_id from water_meters table
             $customerToMeter = DB::connection('old')->table('water_meters')
                 ->select('id', 'customer_id')
@@ -122,6 +130,7 @@ class MigrateOldData extends Command
                     'id' => $b->id,
                     'meter_id' => $meterId,
                     'amount_due' => $b->amount,
+                    'status' => $statusMap[$b->bill_status_id] ?? 'pending',
                     'created_at' => $b->created_at,
                     'updated_at' => $b->updated_at,
                 ]);

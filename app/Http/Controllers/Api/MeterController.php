@@ -46,7 +46,7 @@ class MeterController extends Controller
         $endDate = now()->toDateString();
 
         //calculate carry forward Balabce
-        $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->sum('amount_due')) - ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
+        $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '<>', 'void')->sum('amount_due')) - ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
 
         //Get transactions from start of the year
         $transactions = $meter->bills()
@@ -87,7 +87,7 @@ class MeterController extends Controller
 
     public function downloadAllStatements()
     {
-        $meters = Meter::with('resident')->get();
+        $meters = Meter::with('resident')->where('status', 'active')->get();
         $pdfs = [];
 
         foreach ($meters as $meter) {
@@ -98,18 +98,20 @@ class MeterController extends Controller
             $startDate = now()->startOfYear()->toDateString();
             $endDate = now()->toDateString();
 
-            $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->sum('amount_due')) -
+            $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '<>', 'void')->sum('amount_due')) -
                             ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
 
             $transactions = $meter->bills()
                                 ->whereBetween('created_at', [$startDate, $endDate])
+                                ->where('status', '<>', 'void')
                                 ->get()
                                 ->merge(
                                     $meter->payments()
                                         ->whereBetween('created_at', [$startDate, $endDate])
                                         ->orderBy('created_at', 'desc')
                                         ->get()
-                                );
+                                )
+                                ->sortBy('created_at'); // Optional: ensure proper order
 
             $pdf = Pdf::loadView('pdf.statement', [
                 'transactions' => $transactions,
@@ -117,9 +119,10 @@ class MeterController extends Controller
                 'startDate' => $startDate,
                 'endDate' => $endDate,
                 'resident' => $meter->resident,
+                'meter' => $meter,
             ]);
 
-            $pdfs[] = $pdf->output(); // Add raw PDF string
+            $pdfs[$meter->id] = $pdf->output(); // Store using meter ID
         }
 
         if (empty($pdfs)) {
@@ -129,8 +132,8 @@ class MeterController extends Controller
         // Combine all PDFs using FPDI
         $combinedPdf = new Fpdi();
 
-        foreach ($pdfs as $rawPdf) {
-            $tmpPath = storage_path('app/tmp_statement.pdf');
+        foreach ($pdfs as $meterId => $rawPdf) {
+            $tmpPath = storage_path('app/tmp_statement_' . $meterId . '.pdf'); // FIXED here
             file_put_contents($tmpPath, $rawPdf);
 
             $pageCount = $combinedPdf->setSourceFile($tmpPath);
@@ -147,8 +150,9 @@ class MeterController extends Controller
         $finalPdfPath = storage_path('app/all-meter-statements.pdf');
         $combinedPdf->Output($finalPdfPath, 'F');
 
-        return response()->download($finalPdfPath, 'all-meter-statements.pdf')->deleteFileAfterSend(true);
+        return response()->download($finalPdfPath, 'all-meter-statements-' . date('y-m-d') . '.pdf')->deleteFileAfterSend(true);
     }
+
 
     public function show($id)
     {
