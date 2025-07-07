@@ -88,8 +88,8 @@ class MigrateOldData extends Command
                     'resident_id' => $m->customer_id,
                     'meter_number' => $originalMeterNumber,
                     'meter_name' => $customers[$m->customer_id]->name ?? 'Unknown',
-                    'location' => $addresses[$m->customer_id]->address ?? Str::random(6),
-                    'installation_date' => $m->created_at,
+                    'location' => $addresses[$m->customer_id]->address ?? 'Unknown',
+                    'installation_date' => $m->created_at ? Carbon::parse($m->created_at)->toDateString() : null,
                     'created_at' => $m->created_at,
                     'updated_at' => $m->updated_at,
                 ]);
