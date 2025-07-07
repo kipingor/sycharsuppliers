@@ -27,7 +27,9 @@ class MeterController extends Controller
                 $query->selectRaw('meter_id, max(reading_value) - min(reading_value) as total_units')
                     ->groupBy('meter_id');
             }])
-            ->withSum('bills', 'amount_due')
+            ->withSum(['bills' => function ($query) {
+                $query->where('status', '!=', 'void');
+            }], 'amount_due')
             ->withSum('payments', 'amount')            
             ->when($search, function ($query, $search) {
                 $query->where('meter_number', 'like', "%{$search}%")

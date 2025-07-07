@@ -46,7 +46,7 @@ class MeterController extends Controller
         $endDate = now()->toDateString();
 
         //calculate carry forward Balabce
-        $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '<>', 'void')->sum('amount_due')) - ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
+        $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '!=', 'void')->sum('amount_due')) - ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
 
         //Get transactions from start of the year
         $transactions = $meter->bills()
@@ -98,12 +98,12 @@ class MeterController extends Controller
             $startDate = now()->startOfYear()->toDateString();
             $endDate = now()->toDateString();
 
-            $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '<>', 'void')->sum('amount_due')) -
+            $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '!=', 'void')->sum('amount_due')) -
                             ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
 
             $transactions = $meter->bills()
                                 ->whereBetween('created_at', [$startDate, $endDate])
-                                ->where('status', '<>', 'void')
+                                ->where('status', '!=', 'void')
                                 ->get()
                                 ->merge(
                                     $meter->payments()
