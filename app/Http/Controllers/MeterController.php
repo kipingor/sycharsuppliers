@@ -46,6 +46,8 @@ class MeterController extends Controller
                 return [
                     'id' => $meter->id,
                     'meter_number' => $meter->meter_number,
+                    'meter_name' => $meter->meter_name,
+                    'installation_date' => $meter->installation_date,
                     'resident' => $meter->resident,
                     'location' => $meter->location,
                     'total_units' => $meter->meterReadings->first()->total_units ?? 0,

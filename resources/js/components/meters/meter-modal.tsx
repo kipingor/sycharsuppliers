@@ -54,10 +54,12 @@ export default function MeterModal({
     const [status, setStatus] = useState<'active' | 'inactive' | 'replaced'>("active");
     const [installationDate, setInstallationDate] = useState("");
     const [residentId, setResidentId] = useState<string>("");
+    const [selectedResidentName, setSelectedResidentName] = useState<string>("");
 
     const residentsData = Array.isArray(residents) ? residents : residents?.data || [];
 
     useEffect(() => {
+        console.log('Edit Meter:', editMeter);
         if (!editMeter) {
             const randomMeter = Math.floor(10000000 + Math.random() * 90000000).toString();
             setMeterNumber(randomMeter);
@@ -66,13 +68,19 @@ export default function MeterModal({
             setStatus("active");
             setInstallationDate("");
             setResidentId("");
+            setSelectedResidentName("");
         } else {
             setMeterNumber(editMeter.meter_number || "");
             setMeterName(editMeter.meter_name || "");
             setLocation(editMeter.location || "");
             setStatus(editMeter.status || "active");
-            setInstallationDate(editMeter.installation_date || "");
+            let date = editMeter.installation_date || "";
+            if (date && date.includes("T")) {
+                date = date.split("T")[0];
+            }
+            setInstallationDate(date);
             setResidentId(editMeter.resident_id?.toString() || "");
+            setSelectedResidentName(editMeter.resident?.name || "");
         }
     }, [editMeter, show]);
 
@@ -115,36 +123,35 @@ export default function MeterModal({
                 </h2>
 
                 {/* Select Resident */}
-                <div>                    
-                    {editMeter ? (
-                        <span>{editMeter?.resident?.name || 'No Resident Assigned'}</span>
-                    ) : (
-                        <>
-                            <label className="block mb-1 font-medium">Select Resident</label>
-                            <div className="flex items-center gap-2">
-                                <Select 
-                                    value={residentId} 
-                                    onValueChange={(value) => setResidentId(value || "")}
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select Resident" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="No Resident">No Resident</SelectItem>
-                                        {residentsData.map((resident) => (
-                                            <SelectItem key={resident.id} value={resident.id.toString()}>
-                                                {resident.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Button type="button" onClick={onAddResident} variant="outline">
-                                    + Add
-                                </Button>
-                            </div>
-                        </>
-                    )}                        
-                    
+                <div>
+                    <>
+                        <label className="block mb-1 font-medium">Select Resident</label>
+                        <div className="flex items-center gap-2">
+                            <Select 
+                                value={residentId} 
+                                onValueChange={(value) => {
+                                    setResidentId(value || "");
+                                    const selectedResident = residentsData.find(resident => resident.id.toString() === value);
+                                    setSelectedResidentName(selectedResident ? selectedResident.name : "");
+                                }}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select Resident" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="No Resident">No Resident</SelectItem>
+                                    {residentsData.map((resident) => (
+                                        <SelectItem key={resident.id} value={resident.id.toString()}>
+                                            {resident.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Button type="button" onClick={onAddResident} variant="outline">
+                                + Add
+                            </Button>
+                        </div>
+                    </>
                 </div>
 
                 {/* Meter Number */}
@@ -211,6 +218,12 @@ export default function MeterModal({
                             <SelectItem value="replaced">Replaced</SelectItem>
                         </SelectContent>
                     </Select>
+                </div>
+
+                {/* Selected Resident Display */}
+                <div>
+                    <label className="block mb-1 font-medium">Selected Resident</label>
+                    <p>{selectedResidentName}</p>
                 </div>
 
                 {/* Action Buttons */}
