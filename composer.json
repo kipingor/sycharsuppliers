@@ -18,6 +18,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "maatwebsite/excel": "^3.1",
+        "mailersend/laravel-driver": "^2.11",
         "owen-it/laravel-auditing": "^14.0",
         "safaricom/mpesa": "^1.0",
         "setasign/fpdf": "^1.8",

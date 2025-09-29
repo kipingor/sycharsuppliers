@@ -13,11 +13,14 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use MailerSend\Helpers\Builder\Variable;
+use MailerSend\Helpers\Builder\Personalization;
+use MailerSend\LaravelDriver\MailerSendTrait;
 
 
 class BillingStatement extends Mailable
 {
-    use Queueable, SerializesModels;    
+    use Queueable, SerializesModels, MailerSendTrait;    
 
     public $total_billed;
     public $total_paid;
@@ -47,7 +50,7 @@ class BillingStatement extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            from: new Address('info@sycharsuppliers', 'Sychar Suppliers'),
+            from: new Address('sales@sycharsuppliers.com', 'Sychar Suppliers'),
             subject: 'Billing Statement',
         );
     }
@@ -67,7 +70,7 @@ class BillingStatement extends Mailable
                 'details' => $this->details,
                 'total_billed' => $this->total_billed,
                 'total_paid' => $this->total_paid,
-                'balance_du' => $this->balance_due,
+                'balance_due' => $this->balance_due,
             ],
         );
     }

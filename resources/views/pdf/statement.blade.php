@@ -54,6 +54,7 @@
             <tr>
                 <th>Date</th>
                 <th>Type</th>
+                <th>Meter Readings</th>
                 <th>Description</th>
                 <th class="right">Bill (KES)</th>
                 <th class="right">Payment (KES)</th>
@@ -81,6 +82,16 @@
                 <tr>
                     <td>{{ $date }}</td>
                     <td>{{ $isBill ? 'Bill' : 'Payment' }}</td>
+                    @if ($isBill)
+                        @php
+                            $previousReading = $transaction->details->previous_reading_value ?? ($previous_meter_reading ?? 0);
+                            $currentReading = $transaction->details->current_reading_value ?? ($current_meter_reading ?? 0);
+                            $unitsUsed = $transaction->details->units_used ?? ($currentReading - $previousReading);
+                        @endphp
+                        <td>Prev: {{ number_format($previousReading, 2) }}, Curr: {{ number_format($currentReading, 2) }}, Units: {{ number_format($unitsUsed, 2) }}</td>
+                    @else
+                        <td></td>
+                    @endif
                     <td>{{ $description }}</td>
                     <td class="right">{{ $bill ? number_format($bill, 2) : '' }}</td>
                     <td class="right">{{ $payment ? number_format($payment, 2) : '' }}</td>
