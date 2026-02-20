@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Models\Billing;
 
 class UpdateBillingRequest extends FormRequest
 {
@@ -11,7 +12,8 @@ class UpdateBillingRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        $bill = Billing::find($this->route('billing'));
+        return $bill && $this->user()->can('update', $bill);
     }
 
     /**

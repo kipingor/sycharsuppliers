@@ -2,7 +2,7 @@ import { PlaceholderPattern } from '@/components/ui/placeholder-pattern';
 import AppLayout from '@/layouts/app-layout';
 import * as React from 'react';
 import { Progress } from "@/components/ui/progress"
-import { type BreadcrumbItem } from '@/types';
+import { SharedData, type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import MetricCard from '@/components/ui/metric-card';
 import {
@@ -52,14 +52,24 @@ type ChartData = {
     yearlyConsumption: Record<string, number>;
 };
 
-export default function Dashboard({ user, initialMetrics, initialChartData }: { user: User; initialMetrics: Metrics; initialChartData: ChartData }) {
-    const [period, setPeriod] = React.useState<string>('last_week');
-    const [metrics, setMetrics] = React.useState<Metrics>(initialMetrics);
-    const [chartData, setChartData] = React.useState<ChartData>(initialChartData);     
-    const [activeChart, setActiveChart] = React.useState<keyof typeof chartConfig>('monthlyRevenue');
-    const [loading, setLoading] = React.useState<boolean>(false);
-    const [progress, setProgress] = React.useState(13);
-    const props = usePage().props;
+interface DashboardProps {
+    user: User;
+    metrics: Metrics;
+    chartData: ChartData;
+    period: string;
+    can: {
+        downloadReadingList: boolean;
+    };
+}
+
+export default function Dashboard() {
+    const {
+        user,
+        metrics,
+        chartData,
+        period,
+        can,
+    } = usePage<SharedData & DashboardProps>().props;
 
     const chartConfig = {
         monthlyRevenue: {
@@ -72,56 +82,36 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
         },
     } satisfies ChartConfig
 
-
-    const fetchMetrics = async (selectedPeriod: string) => {
-        setLoading(true);
-
-        try {
-            const response = await fetch(`${route('dashboard')}?period=${selectedPeriod}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': props.csrf_token as string
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
+    const [activeChart, setActiveChart] = React.useState<keyof typeof chartConfig>('monthlyRevenue');
+    const [progress, setProgress] = React.useState(13);
+    const changePeriod = (value: string) => {
+        router.get(
+            route('dashboard'),
+            { period: value },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
             }
-
-            const data = await response.json();
-            console.log('Fetched data:', data);
-            setMetrics(data.metrics);
-            setChartData(data.chartData);
-        } catch (error) {
-            console.error('Error fetching data:', error);
-            // toast("Failed to fetch dashboard data");
-            toast.error('Failed to fetch dashboard data');
-        } finally {
-            setLoading(false);
-        }
-    };    
-
-    const downloadReadingList = async () => {        
-        const response = await fetch('/api/meters/reading-list');
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', 'reading-list.pdf');
-        document.body.appendChild(link);
-        link.click();
-        if (link.parentNode) {
-            link.parentNode.removeChild(link);
-        }
+        );
     };
-    
-    // Fetch data when the period changes
-    React.useEffect(() => {
-        console.log('Period changed to:', period);
-        fetchMetrics(period);
-    }, [period]);
+
+    const downloadReadingList = () => {        
+        router.get(route('meters.reading-list.download'), {}, {
+            preserveState: true,
+        });
+    };
+    //     const blob = await response.blob();
+    //     const url = window.URL.createObjectURL(blob);
+    //     const link = document.createElement('a');
+    //     link.href = url;
+    //     link.setAttribute('download', 'reading-list.pdf');
+    //     document.body.appendChild(link);
+    //     link.click();
+    //     if (link.parentNode) {
+    //         link.parentNode.removeChild(link);
+    //     }
+    // };    
 
     const total = React.useMemo(
         () => ({
@@ -136,8 +126,6 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
         return () => clearTimeout(timer)
       }, [])
 
-    if (loading) return <Progress value={progress} className="w-[60%]" />;
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
@@ -150,7 +138,7 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
                 <div className="mt-8 flex items-end justify-between">
                     <h2 className="text-base font-semibold text-zinc-950 dark:text-white">Overview</h2>
                     <div className="flex gap-2">
-                        <Select value={period} onValueChange={setPeriod}>
+                        <Select value={period} onValueChange={changePeriod}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Select period" />
                             </SelectTrigger>
@@ -161,15 +149,15 @@ export default function Dashboard({ user, initialMetrics, initialChartData }: { 
                                 <SelectItem value="last_quarter">Last quarter</SelectItem>
                             </SelectContent>
                         </Select>
-                        <Button
-                            onClick={() => {
-                                downloadReadingList();
-                            }}
-                            className="flex items-center gap-2"
-                        >
-                            <Download size={18} />
-                            Download Reading List
-                        </Button>                        
+                        {can.downloadReadingList && (
+                            <Button
+                                onClick={downloadReadingList}
+                                className="flex items-center gap-2"                        
+                            >
+                                <Download size={18} />
+                                Download Reading List
+                            </Button>
+                        )}
                     </div>
                 </div>
                 {/* Metrics Cards */}

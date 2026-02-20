@@ -1,8 +1,30 @@
 import { LucideIcon } from 'lucide-react';
 import type { Config } from 'ziggy-js';
 
+export interface PermissionSet {
+    viewAny?: boolean;
+    view?: boolean;
+    create?: boolean;
+    update?: boolean;
+    delete?: boolean;
+    restore?: boolean;
+    forceDelete?: boolean;
+    generate?: boolean;
+    void?: boolean;
+    rebill?: boolean;
+    reconcile?: boolean;
+}
+
 export interface Auth {
     user: User;
+    can?: {
+        billing?: PermissionSet;
+        meter?: PermissionSet;
+        payment?: PermissionSet;
+        resident?: PermissionSet;
+        expense?: PermissionSet;
+        employee?: PermissionSet;
+    };
 }
 
 export interface BreadcrumbItem {
@@ -20,13 +42,23 @@ export interface NavItem {
     url: string;
     icon?: LucideIcon | null;
     isActive?: boolean;
+    items?: NavItem[];
+}
+
+export interface FlashMessages {
+    success?: string;
+    error?: string;
+    warning?: string;
+    info?: string;
 }
 
 export interface SharedData {
     name: string;
-    quote: { message: string; author: string };
     auth: Auth;
+    flash?: FlashMessages;
     ziggy: Config & { location: string };
+    quote: { message: string; author: string };
+    errors?: Record<string, string | string[]>;
     [key: string]: unknown;
 }
 

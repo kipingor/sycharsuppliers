@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Resident;
+use App\Http\Requests\StoreResidentRequest;
 use Illuminate\Http\Request;
 
 class ResidentController extends Controller
@@ -18,7 +19,7 @@ class ResidentController extends Controller
         return Resident::with(['meters', 'bills', 'payments'])->findOrFail($id);
     }
 
-    public function store(Request $request)
+    public function store(StoreResidentRequest $request)
     {
         $request->validate([
             'name' => 'required|string|max:255',

@@ -9,58 +9,69 @@ use Illuminate\Auth\Access\Response;
 class ExpensePolicy
 {
     /**
-     * Determine whether the user can view any models.
+     * View all expenses
+     * Admin and accountant
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->hasRole(['admin', 'accountant']);
     }
 
     /**
-     * Determine whether the user can view the model.
+     * View specific expense
      */
     public function view(User $user, Expense $expense): bool
     {
-        return false;
+        return $user->hasRole(['admin', 'accountant']);
     }
 
     /**
-     * Determine whether the user can create models.
+     * Create expense (admin and accountant)
      */
     public function create(User $user): bool
     {
-        return $user->role == 'admin';
+        return $user->hasRole(['admin', 'accountant']);
     }
 
     /**
-     * Determine whether the user can update the model.
+     * Update expense (admin and accountant, not if approved)
      */
     public function update(User $user, Expense $expense): bool
     {
-        return false;
+        if (!$user->hasRole(['admin', 'accountant'])) {
+            return false;
+        }
+        
+        // Prevent updating approved expenses
+        return !$expense->approved_at;
     }
 
     /**
-     * Determine whether the user can delete the model.
+     * Delete expense (admin only, not if approved)
      */
     public function delete(User $user, Expense $expense): bool
     {
-        return false;
+        if (!$user->hasRole('admin')) {
+            return false;
+        }
+        
+        // Prevent deleting approved expenses
+        return !$expense->approved_at;
     }
 
     /**
-     * Determine whether the user can restore the model.
+     * Restore soft-deleted expense
      */
     public function restore(User $user, Expense $expense): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can permanently delete the model.
+     * Permanently delete expense
      */
     public function forceDelete(User $user, Expense $expense): bool
     {
-        return false;
+        return $user->hasRole('admin') && $user->email === 'admin@sycharsuppliers.com';
     }
 }

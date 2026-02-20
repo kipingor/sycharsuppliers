@@ -12,7 +12,7 @@ use App\Models\Employee;
 use App\Models\BillingDetail;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;

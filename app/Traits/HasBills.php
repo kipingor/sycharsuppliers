@@ -13,13 +13,13 @@ trait HasBills
      */
     public function bills(): HasMany
     {
-        return $this->hasMany(Billing::class);
+        return $this->billings();
     }
 
     /**
      * Generate a new bill for the current resident/meter.
      */
-    public function generateBill(float $unitPrice = 300): Bill
+    public function generateBill(float $unitPrice = 300): Billing
     {
         $latestReading = $this->meterReadings()->latest()->first();
         $previousReading = $this->meterReadings()->orderBy('created_at', 'desc')->skip(1)->first();
@@ -31,10 +31,10 @@ trait HasBills
         $unitsUsed = $latestReading->reading - $previousReading->reading;
         $amountDue = $unitsUsed * $unitPrice;
 
-        return $this->bills()->create([
+        return $this->billings()->create([
             'billing_period' => Carbon::now()->format('Y-m'),
             'units_used' => $unitsUsed,
-            'amount_due' => $amountDue,
+            'total_amount' => $amountDue,
             'status' => 'pending',
         ]);
     }
@@ -64,6 +64,6 @@ trait HasBills
      */
     public function totalOutstandingBalance(): float
     {
-        return $this->bills()->where('status', 'pending')->sum('amount_due');
+        return $this->bills()->where('status', 'pending')->sum('total_amount');
     }
 }

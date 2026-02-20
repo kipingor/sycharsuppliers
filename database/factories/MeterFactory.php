@@ -19,13 +19,9 @@ class MeterFactory extends Factory
     public function definition(): array
     {
         return [
-            'resident_id' => Resident::factory(),
-            'meter_name' => $this->faker->name(),
-            'meter_number' => strtoupper(Str::random(12)),
-            'location' => $this->faker->address(),
-            'type' => $this->faker->randomElement(['analog', 'digital']),
-            'status' => $this->faker->randomElement(['active', 'inactive', 'replaced']),
-            'installation_date' => $this->faker->date(),
+            'meter_number' => $this->faker->unique()->numerify('MTR-#####'),
+            'location' => $this->faker->address,
+            'status' => 'active',
         ];
     }
 }

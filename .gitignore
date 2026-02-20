@@ -1,5 +1,6 @@
 /.phpunit.cache
 /bootstrap/ssr
+/config/.php-cs-fixer.dist.php
 /node_modules
 /public/build
 /public/hot

@@ -9,58 +9,59 @@ use Illuminate\Auth\Access\Response;
 class TaxPolicy
 {
     /**
-     * Determine whether the user can view any models.
+     * View all taxes
+     * Admin and accountant
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->hasRole(['admin', 'accountant']);
     }
 
     /**
-     * Determine whether the user can view the model.
+     * View specific tax
      */
     public function view(User $user, Tax $tax): bool
     {
-        return false;
+        return $user->hasRole(['admin', 'accountant']);
     }
 
     /**
-     * Determine whether the user can create models.
+     * Create tax (admin only)
      */
     public function create(User $user): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can update the model.
+     * Update tax (admin only)
      */
     public function update(User $user, Tax $tax): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can delete the model.
+     * Delete tax (admin only)
      */
     public function delete(User $user, Tax $tax): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can restore the model.
+     * Restore soft-deleted tax
      */
     public function restore(User $user, Tax $tax): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can permanently delete the model.
+     * Permanently delete tax
      */
     public function forceDelete(User $user, Tax $tax): bool
     {
-        return false;
+        return $user->hasRole('admin') && $user->email === 'admin@sycharsuppliers.com';
     }
 }

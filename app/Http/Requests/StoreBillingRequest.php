@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Models\Billing;
+use App\Models\MeterReading;
 
 class StoreBillingRequest extends FormRequest
 {
@@ -11,7 +13,8 @@ class StoreBillingRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        $bill = Billing::find($this->route('billing'));
+        return $bill && $this->user()->can('create', $bill);
     }
 
     /**
@@ -31,7 +34,7 @@ class StoreBillingRequest extends FormRequest
                     $lastReading = MeterReading::where('meter_id', $this->input('meter_id'))
                         ->latest('reading_date')
                         ->value('reading_value');
-    
+
                     if ($lastReading !== null && $value <= $lastReading) {
                         $fail("The new reading must be greater than the last reading ({$lastReading}).");
                     }

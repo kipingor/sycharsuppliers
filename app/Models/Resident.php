@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Traits\HasBills;
 use App\Traits\HasPayments;
 use App\Traits\HasNotifications;
@@ -33,7 +34,7 @@ class Resident extends Model
     public function meters(): HasMany
     {
         return $this->hasMany(Meter::class);
-    }    
+    }
 
     /**
      * Activate the resident.
@@ -49,5 +50,13 @@ class Resident extends Model
     public function deactivate(): void
     {
         $this->update(['status' => false]);
+    }
+
+    /**
+     * Get account for this resident
+     */
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 }

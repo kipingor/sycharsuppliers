@@ -9,58 +9,59 @@ use Illuminate\Auth\Access\Response;
 class EmailLogPolicy
 {
     /**
-     * Determine whether the user can view any models.
+     * View all email logs
+     * Admin only (sensitive data)
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can view the model.
+     * View specific email log
      */
     public function view(User $user, EmailLog $emailLog): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can create models.
+     * Create email log (system generated, not user action)
      */
     public function create(User $user): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can update the model.
+     * Update email log (admin only)
      */
     public function update(User $user, EmailLog $emailLog): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can delete the model.
+     * Delete email log (admin only, for compliance)
      */
     public function delete(User $user, EmailLog $emailLog): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can restore the model.
+     * Restore soft-deleted email log
      */
     public function restore(User $user, EmailLog $emailLog): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can permanently delete the model.
+     * Permanently delete email log
      */
     public function forceDelete(User $user, EmailLog $emailLog): bool
     {
-        return false;
+        return $user->hasRole('admin') && $user->email === 'admin@sycharsuppliers.com';
     }
 }

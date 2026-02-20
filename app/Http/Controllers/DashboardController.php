@@ -18,6 +18,21 @@ class DashboardController extends Controller
     {
         $period = $request->input('period', 'last_week');
 
+        return Inertia::render('dashboard', [
+            'user' => $request->user(),
+            'period' => $period,
+            'metrics' => $this->getDashboardCharts($period)['initialMetrics'],
+            'chartData' => $this->getDashboardCharts($period)['initialChartData'],
+            'can' => [
+                'downloadReadingList' => $request->user()->can('export', MeterReading::class),
+            ],
+        ]);
+    }
+
+    protected function getDashboardCharts($period)
+    {
+        // Placeholder for chart data logic
+
         switch ($period) {
             case 'last_two':
                 $startDate = now()->subWeeks(2)->startOfWeek();
@@ -32,13 +47,13 @@ class DashboardController extends Controller
                 $startDate = now()->subWeek()->startOfWeek();
                 break;
         }
-        $endDate = now()->endOfDay();
 
+        $endDate = now()->endOfDay();
         $totalResidents = Resident::count();
         $activeMeters = Meter::where('status', 'active')->count();
 
         $totalRevenue = Payment::whereBetween('created_at', [$startDate, $endDate])->sum('amount');
-        $pendingPayments = Billing::where('status', 'pending')->sum('amount_due');
+        $pendingPayments = Billing::where('status', 'pending')->sum('total_amount');
         $overdueBillsCount = Billing::where('status', 'overdue')->count();
 
         $monthlyRevenue = Payment::selectRaw('MONTH(created_at) as month, YEAR(created_at) as year, SUM(amount) as total')
@@ -61,7 +76,6 @@ class DashboardController extends Controller
             });
 
         $data = [
-            'user' => Auth::user(),
             'initialMetrics' => [
                 'totalResidents' => $totalResidents,
                 'activeMeters' => $activeMeters,
@@ -74,14 +88,6 @@ class DashboardController extends Controller
                 'yearlyConsumption' => $yearlyConsumption,
             ]
         ];
-
-        if ($request->wantsJson()) {
-            return response()->json([
-                'metrics' => $data['initialMetrics'],
-                'chartData' => $data['initialChartData']
-            ]);
-        }
-
-        return Inertia::render('dashboard', $data);
+        return $data;
     }
 }

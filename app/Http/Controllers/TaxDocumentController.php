@@ -68,8 +68,9 @@ class TaxDocumentController extends Controller
 
     public function generateTaxDocument($type, $period_start, $period_end)
     {
-        $total_income = Bill::whereBetween('created_at', [$period_start, $period_end])->sum('amount_due');
-        $total_expenses = Expense::whereBetween('expense_date', [$period_start, $period_end])->sum('amount');
+        $total_income = \App\Models\Billing::whereBetween('created_at', [$period_start, $period_end])
+            ->sum('total_amount');
+        $total_expenses = \App\Models\Expense::whereBetween('expense_date', [$period_start, $period_end])->sum('amount');
         $taxable_amount = $total_income - $total_expenses;
 
         $taxDocument = TaxDocument::create([

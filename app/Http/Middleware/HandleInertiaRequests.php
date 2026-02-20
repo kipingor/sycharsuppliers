@@ -9,6 +9,7 @@ use App\Models\Expense;
 use App\Models\Meter;
 use App\Models\Payment;
 use App\Models\Resident;
+use App\Models\Report;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
@@ -51,28 +52,44 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $request->user(),
-                // 'permissions' => [
-                //     'billing' => [
-                //         'create' => $request->user()->can('create', Billing::class),
-                //     ],
-                //     'employee' => [
-                //         'create' => $request->user()->can('create', Employee::class),
-                //     ],
-                //     'expense' => [
-                //         'create' => $request->user()->can('create', Expense::class),
-                //     ],
-                //     'meter' => [
-                //         'create' => $request->user()->can('create', Meter::class),
-                //     ],
-                //     'payment' => [
-                //         'create' => $request->user()->can('create', Payment::class),
-                //     ],
-                //     'resident' => [
-                //         'create' => $request->user()->can('create', Resident::class),
-                //     ],
-                // ]
+                'can' => $request->user() ? [
+                    'billing' => [
+                        'viewAny' => $request->user()?->can('viewAny', Billing::class) ?? false,
+                        'create' => $request->user()?->can('create', Billing::class) ?? false,
+                        'generate' => $request->user()?->can('generate', Billing::class) ?? false,
+                    ],
+                    'meter' => [
+                        'viewAny' => $request->user()?->can('viewAny', Meter::class) ?? false,
+                        'create' => $request->user()?->can('create', Meter::class) ?? false,
+                    ],
+                    'payment' => [
+                        'viewAny' => $request->user()?->can('viewAny', Payment::class) ?? false,
+                        'create' => $request->user()?->can('create', Payment::class) ?? false,
+                    ],
+                    'resident' => [
+                        'viewAny' => $request->user()?->can('viewAny', Resident::class) ?? false,
+                        'create' => $request->user()?->can('create', Resident::class) ?? false,
+                    ],
+                    'expense' => [
+                        'viewAny' => $request->user()?->can('viewAny', Expense::class) ?? false,
+                        'create' => $request->user()?->can('create', Expense::class) ?? false,
+                    ],
+                    'employee' => [
+                        'viewAny' => $request->user()?->can('viewAny', Employee::class) ?? false,
+                        'create' => $request->user()?->can('create', Employee::class) ?? false,
+                    ],
+                    'report' => [
+                        'viewAny' => $request->user()->can('viewAny', Report::class),
+                    ],
+                ] : null,
             ],
-            'ziggy' => fn (): array => [
+            'flash' => [
+                'success' => $request->session()->get('success'),
+                'error' => $request->session()->get('error'),
+                'warning' => $request->session()->get('warning'),
+                'info' => $request->session()->get('info'),
+            ],
+            'ziggy' => fn(): array => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
             ]

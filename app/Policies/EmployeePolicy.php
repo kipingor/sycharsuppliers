@@ -9,58 +9,59 @@ use Illuminate\Auth\Access\Response;
 class EmployeePolicy
 {
     /**
-     * Determine whether the user can view any models.
+     * View all employees
+     * Admin only
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can view the model.
+     * View specific employee
      */
     public function view(User $user, Employee $employee): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can create models.
+     * Create employee (admin only)
      */
     public function create(User $user): bool
     {
-        return $user->role == 'admin';
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can update the model.
+     * Update employee (admin only)
      */
     public function update(User $user, Employee $employee): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can delete the model.
+     * Delete employee (admin only)
      */
     public function delete(User $user, Employee $employee): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can restore the model.
+     * Restore soft-deleted employee
      */
     public function restore(User $user, Employee $employee): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can permanently delete the model.
+     * Permanently delete employee
      */
     public function forceDelete(User $user, Employee $employee): bool
     {
-        return false;
+        return $user->hasRole('admin') && $user->email === 'admin@sycharsuppliers.com';
     }
 }

@@ -15,6 +15,7 @@ class Employee extends Model
     protected $fillable = [
         'user_id',
         'phone',
+        'idnumber',
         'position',
         'salary',
         'status',
@@ -23,7 +24,6 @@ class Employee extends Model
 
     protected $casts = [
         'hire_date' => 'date',
-        'status' => 'boolean', // Active (1) or Inactive (0)
     ];
 
     /**
@@ -39,7 +39,7 @@ class Employee extends Model
      */
     public function activate(): void
     {
-        $this->update(['status' => true]);
+        $this->update(['status' => 'active']);
     }
 
     /**
@@ -47,6 +47,6 @@ class Employee extends Model
      */
     public function deactivate(): void
     {
-        $this->update(['status' => false]);
+        $this->update(['status' => 'inactive']);
     }
 }

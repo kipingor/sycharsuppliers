@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Employee;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreEmployeeRequest extends FormRequest
 {
@@ -11,7 +14,7 @@ class StoreEmployeeRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return $this->user()->can('create', Employee::class);
     }
 
     /**
@@ -22,7 +25,13 @@ class StoreEmployeeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'phone' => ['required', 'string', 'max:20', 'unique:employees,phone'],
+            'idnumber' => ['required', 'string', 'max:20', 'unique:employees,idnumber'],
+            'position' => ['required', 'string', 'max:255'],
+            'salary' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+            'hire_date' => ['required', 'date', 'before_or_equal:today'],
+            'status' => ['sometimes', 'required', Rule::in(['active', 'inactive', 'terminated'])],
         ];
     }
 }

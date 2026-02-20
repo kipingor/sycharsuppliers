@@ -7,14 +7,11 @@ use App\Models\Meter;
 use App\Models\Billing;
 use App\Models\BillingDetail;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use MailerSend\Helpers\Builder\Variable;
-use MailerSend\Helpers\Builder\Personalization;
 use MailerSend\LaravelDriver\MailerSendTrait;
 
 
@@ -22,26 +19,19 @@ class BillingStatement extends Mailable
 {
     use Queueable, SerializesModels, MailerSendTrait;    
 
-    public $total_billed;
-    public $total_paid;
-    public $balance_due;
+    public $pdf;
+    public $billigData;
 
     /**
      * Create a new message instance.
      */
     public function __construct(
-        public Resident $resident, 
-        public Meter $meter, 
-        public Billing $billing, 
-        public BillingDetail $details, 
-        $total_billed, 
-        $total_paid, 
-        $balance_due
+        $pdf, 
+        $billingData
         )
     {        
-        $this->total_billed = $total_billed;
-        $this->total_paid = $total_paid;
-        $this->balance_due = $balance_due;
+        $this->pdf = $pdf;
+        $this->billingData = $billingData;
     }
 
     /**
