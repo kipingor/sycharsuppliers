@@ -33,16 +33,17 @@ class TariffRate extends Model implements Auditable
     protected $fillable = [
         'tariff_id',
         'name',
+        'tier_number',
         'min_units',
         'max_units',
-        'rate',
+        'rate_per_unit',
         'sort_order',
     ];
 
     protected $casts = [
         'min_units' => 'decimal:2',
         'max_units' => 'decimal:2',
-        'rate' => 'decimal:2',
+        'rate_per_unit' => 'decimal:2',
         'sort_order' => 'integer',
     ];
 
@@ -53,7 +54,7 @@ class TariffRate extends Model implements Auditable
         'tariff_id',
         'min_units',
         'max_units',
-        'rate',
+        'rate_per_unit',
         'sort_order',
     ];
 
@@ -234,9 +235,10 @@ class TariffRate extends Model implements Auditable
         return [
             'id' => $this->id,
             'name' => $this->name,
+            'tier_number' => $this->tier_number,
             'min_units' => $this->min_units,
             'max_units' => $this->max_units,
-            'rate' => $this->rate,
+            'rate_per_unit' => $this->rate_per_unit,
             'unit_range' => $this->getUnitRange(),
             'display_range' => $this->getDisplayRange(),
             'is_open_ended' => $this->isOpenEnded(),
@@ -259,8 +261,8 @@ class TariffRate extends Model implements Auditable
         }
 
         // Check rate is positive
-        if ($this->rate < 0) {
-            $errors[] = 'Rate cannot be negative';
+        if ($this->rate_per_unit < 0) {
+            $errors[] = 'Rate per unit cannot be negative';
         }
 
         // Check for overlaps with other rates in same tariff

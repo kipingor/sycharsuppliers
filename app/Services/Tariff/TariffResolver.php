@@ -6,26 +6,17 @@ use App\Models\Meter;
 use App\Models\Tariff;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Tariff Resolver Service
  * 
- * Resolves the applicable tariff for a meter based on:
- * - Meter type
- * - Effective dates
- * - Account type
- * - Special rules
- * 
- * @package App\Services\Billing
+ * FIXED: Uses correct column names and provides fallback
  */
 class TariffResolver
 {
     /**
      * Get applicable tariff for a meter
-     * 
-     * @param Meter $meter
-     * @param Carbon|null $date Date to check (default: now)
-     * @return Tariff|null
      */
     public function getTariffForMeter(Meter $meter, ?Carbon $date = null): ?Tariff
     {
@@ -48,11 +39,65 @@ class TariffResolver
     /**
      * Resolve tariff based on rules
      * 
-     * @param Meter $meter
-     * @param Carbon $date
-     * @return Tariff|null
+     * ✅ FIXED: Correct column names + fallback logic
      */
     protected function resolveTariff(Meter $meter, Carbon $date): ?Tariff
+    {
+        // Try to find specific tariff for this meter type and date
+        $tariff = $this->findTariffByRules($meter, $date);
+
+        if ($tariff) {
+            return $tariff;
+        }
+
+        // Fallback 1: Try to find a default tariff for this meter type
+        $tariff = Tariff::where('status', 'active')
+            ->where('is_default', true)
+            ->where(function ($q) use ($meter) {
+                $q->whereNull('meter_type')
+                  ->orWhere('meter_type', $meter->meter_type);
+            })
+            ->first();
+
+        if ($tariff) {
+            Log::warning('Using default tariff for meter', [
+                'meter_id' => $meter->id,
+                'meter_number' => $meter->meter_number,
+                'tariff_id' => $tariff->id,
+                'tariff_name' => $tariff->name,
+            ]);
+            return $tariff;
+        }
+
+        // Fallback 2: Try ANY active tariff
+        $tariff = Tariff::where('status', 'active')->first();
+
+        if ($tariff) {
+            Log::warning('Using any active tariff (no specific match found)', [
+                'meter_id' => $meter->id,
+                'meter_number' => $meter->meter_number,
+                'tariff_id' => $tariff->id,
+                'tariff_name' => $tariff->name,
+            ]);
+            return $tariff;
+        }
+
+        // No tariff found at all
+        Log::error('No tariff found for meter', [
+            'meter_id' => $meter->id,
+            'meter_number' => $meter->meter_number,
+            'meter_type' => $meter->meter_type,
+            'date' => $date->format('Y-m-d'),
+            'suggestion' => 'Run: php artisan tariff:create-default',
+        ]);
+
+        return null;
+    }
+
+    /**
+     * Find tariff by specific rules
+     */
+    protected function findTariffByRules(Meter $meter, Carbon $date): ?Tariff
     {
         $query = Tariff::where('status', 'active')
             ->where(function ($q) use ($date) {
@@ -63,19 +108,12 @@ class TariffResolver
                     });
             });
 
-        // Filter by meter type if tariff is type-specific
+        // ✅ FIXED: Use correct column name ($meter->meter_type not $meter->type)
         $query->where(function ($q) use ($meter) {
             $q->whereNull('meter_type')
-                ->orWhere('meter_type', $meter->type);
+                ->orWhere('meter_type', $meter->meter_type);
         });
 
-        // Filter by meter_type (individual/bulk) if tariff specifies
-        $query->where(function ($q) use ($meter) {
-            $q->whereNull('type')
-                ->orWhere('type', $meter->meter_type);
-        });
-
-        // Order by specificity (more specific tariffs first)
         $query->orderByRaw('
             CASE 
                 WHEN meter_type IS NOT NULL THEN 1
@@ -83,7 +121,6 @@ class TariffResolver
             END
         ');
 
-        // Order by effective date (newest first)
         $query->orderBy('effective_from', 'desc');
 
         return $query->first();
@@ -91,9 +128,6 @@ class TariffResolver
 
     /**
      * Get all active tariffs
-     * 
-     * @param Carbon|null $date
-     * @return \Illuminate\Database\Eloquent\Collection
      */
     public function getActiveTariffs(?Carbon $date = null): \Illuminate\Database\Eloquent\Collection
     {
@@ -112,21 +146,16 @@ class TariffResolver
     /**
      * Check if tariff is applicable for a meter
      * 
-     * @param Tariff $tariff
-     * @param Meter $meter
-     * @param Carbon|null $date
-     * @return bool
+     * ✅ FIXED: Correct column names
      */
     public function isTariffApplicable(Tariff $tariff, Meter $meter, ?Carbon $date = null): bool
     {
         $date = $date ?? now();
 
-        // Check status
         if ($tariff->status !== 'active') {
             return false;
         }
 
-        // Check effective dates
         if ($tariff->effective_from > $date) {
             return false;
         }
@@ -135,83 +164,14 @@ class TariffResolver
             return false;
         }
 
-        // Check meter type compatibility
-        if ($tariff->meter_type && $tariff->meter_type !== $meter->type) {
-            return false;
-        }
-
-        // Check meter_type (individual/bulk) compatibility
-        if ($tariff->type && $tariff->type !== $meter->meter_type) {
+        // ✅ FIXED: Check meter_type compatibility (not ->type)
+        if ($tariff->meter_type && $tariff->meter_type !== $meter->meter_type) {
             return false;
         }
 
         return true;
     }
 
-    /**
-     * Get tariff rate for specific consumption
-     * 
-     * @param Tariff $tariff
-     * @param float $consumption
-     * @return float Average rate for the consumption
-     */
-    public function getAverageRateForConsumption(Tariff $tariff, float $consumption): float
-    {
-        if ($consumption <= 0) {
-            return 0;
-        }
-
-        $chargeCalculator = app(\App\Services\Billing\ChargeCalculator::class);
-        $charges = $chargeCalculator->calculateCharges($consumption, $tariff);
-
-        return $charges['average_rate'];
-    }
-
-    /**
-     * Get tariff comparison for a meter
-     * 
-     * @param Meter $meter
-     * @param float $consumption Sample consumption for comparison
-     * @param Carbon|null $date
-     * @return array
-     */
-    public function compareTariffsForMeter(Meter $meter, float $consumption, ?Carbon $date = null): array
-    {
-        $date = $date ?? now();
-        $tariffs = $this->getActiveTariffs($date);
-        $chargeCalculator = app(\App\Services\Billing\ChargeCalculator::class);
-
-        $comparison = [];
-
-        foreach ($tariffs as $tariff) {
-            if (!$this->isTariffApplicable($tariff, $meter, $date)) {
-                continue;
-            }
-
-            $charges = $chargeCalculator->calculateCharges($consumption, $tariff, $meter);
-
-            $comparison[] = [
-                'tariff_id' => $tariff->id,
-                'tariff_name' => $tariff->name,
-                'total_charge' => $charges['total'],
-                'average_rate' => $charges['average_rate'],
-                'breakdown' => $charges['breakdown'],
-            ];
-        }
-
-        // Sort by total charge
-        usort($comparison, fn($a, $b) => $a['total_charge'] <=> $b['total_charge']);
-
-        return $comparison;
-    }
-
-    /**
-     * Get cache key for tariff resolution
-     * 
-     * @param Meter $meter
-     * @param Carbon $date
-     * @return string
-     */
     protected function getCacheKey(Meter $meter, Carbon $date): string
     {
         $prefix = config('billing.cache.prefix', 'billing');
@@ -220,19 +180,12 @@ class TariffResolver
         return "{$prefix}:tariff:meter:{$meter->id}:date:{$dateKey}";
     }
 
-    /**
-     * Clear tariff cache
-     * 
-     * @param Meter|null $meter Clear for specific meter or all
-     * @return void
-     */
     public function clearCache(?Meter $meter = null): void
     {
         if ($meter) {
             $prefix = config('billing.cache.prefix', 'billing');
             Cache::forget("{$prefix}:tariff:meter:{$meter->id}:*");
         } else {
-            // Clear all tariff cache
             Cache::flush();
         }
     }

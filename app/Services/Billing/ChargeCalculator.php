@@ -7,17 +7,17 @@ use App\Models\Tariff;
 
 /**
  * Charge Calculator Service
- * 
+ *
  * Calculates charges based on consumption and tariff rates.
  * Supports tiered rates, fixed charges, and taxes.
- * 
+ *
  * @package App\Services\Billing
  */
 class ChargeCalculator
 {
     /**
      * Calculate charges for consumption
-     * 
+     *
      * @param float $consumption Units consumed
      * @param Tariff $tariff Applicable tariff
      * @param Meter|null $meter Optional meter for fixed charges
@@ -58,7 +58,7 @@ class ChargeCalculator
 
     /**
      * Calculate consumption charge using tiered rates
-     * 
+     *
      * @param float $consumption
      * @param Tariff $tariff
      * @return array ['total', 'breakdown']
@@ -105,13 +105,13 @@ class ChargeCalculator
             }
 
             // Calculate charge for this tier
-            $tierCharge = $tierUnits * $rate->rate;
+            $tierCharge = $tierUnits * $rate->rate_per_unit;
             $total += $tierCharge;
 
             $breakdown[] = [
                 'tier' => $rate->name ?? "Tier {$minUnits}-{$maxUnits}",
                 'units' => $tierUnits,
-                'rate' => $rate->rate,
+                'rate' => $rate->rate_per_unit,
                 'charge' => round($tierCharge, 2),
             ];
 
@@ -126,7 +126,7 @@ class ChargeCalculator
 
     /**
      * Calculate fixed charge (meter charge, service charge, etc.)
-     * 
+     *
      * @param Tariff $tariff
      * @param Meter|null $meter
      * @return float
@@ -151,7 +151,7 @@ class ChargeCalculator
 
     /**
      * Calculate tax on charges
-     * 
+     *
      * @param float $subtotal
      * @param Tariff $tariff
      * @return float
@@ -169,7 +169,7 @@ class ChargeCalculator
 
     /**
      * Calculate late fee for overdue bill
-     * 
+     *
      * @param float $amount Bill amount
      * @param int $daysOverdue Number of days overdue
      * @return float
@@ -199,7 +199,7 @@ class ChargeCalculator
 
     /**
      * Calculate consumption charges for bulk meter distribution
-     * 
+     *
      * @param float $bulkConsumption Total bulk meter consumption
      * @param float $allocationPercentage Sub-meter allocation percentage
      * @param Tariff $tariff
@@ -217,7 +217,7 @@ class ChargeCalculator
 
     /**
      * Get charge summary for display
-     * 
+     *
      * @param array $charges Result from calculateCharges()
      * @return array
      */

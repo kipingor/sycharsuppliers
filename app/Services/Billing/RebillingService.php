@@ -11,10 +11,10 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Rebilling Service
- * 
+ *
  * Handles bill adjustments, corrections, and rebilling operations.
  * Manages credit notes, adjustments, and bill modifications.
- * 
+ *
  * @package App\Services\Billing
  */
 class RebillingService
@@ -23,11 +23,12 @@ class RebillingService
         protected BillingService $billingService,
         protected AuditService $auditService,
         protected ChargeCalculator $chargeCalculator
-    ) {}
+    ) {
+    }
 
     /**
      * Rebill an account with adjustments
-     * 
+     *
      * @param Billing $originalBilling
      * @param array $adjustments
      * @param string $reason
@@ -96,7 +97,7 @@ class RebillingService
 
     /**
      * Create adjusted bill based on original
-     * 
+     *
      * @param Billing $originalBilling
      * @param array $adjustments
      * @return Billing
@@ -108,6 +109,7 @@ class RebillingService
             'account_id' => $originalBilling->account_id,
             'billing_period' => $originalBilling->billing_period,
             'total_amount' => 0, // Will be calculated
+            'amount_due' => 0, // Will be calculated
             'status' => 'pending',
             'issued_at' => now(),
             'due_date' => $originalBilling->due_date,
@@ -134,14 +136,14 @@ class RebillingService
         }
 
         // Update total amount
-        $newBilling->update(['total_amount' => $totalAmount]);
+        $newBilling->update(['total_amount' => $totalAmount, 'amount_due' => $totalAmount]);
 
         return $newBilling;
     }
 
     /**
      * Create adjusted billing detail
-     * 
+     *
      * @param Billing $newBilling
      * @param BillingDetail $originalDetail
      * @param array $adjustments
@@ -178,7 +180,7 @@ class RebillingService
 
     /**
      * Apply global adjustments to total
-     * 
+     *
      * @param float $totalAmount
      * @param array $adjustments
      * @return float
@@ -206,7 +208,7 @@ class RebillingService
 
     /**
      * Apply credit note to a bill
-     * 
+     *
      * @param Billing $billing
      * @param float $creditAmount
      * @param string $reason
@@ -257,7 +259,7 @@ class RebillingService
 
     /**
      * Adjust billing detail
-     * 
+     *
      * @param BillingDetail $detail
      * @param array $changes
      * @param string $reason
@@ -318,7 +320,7 @@ class RebillingService
 
     /**
      * Waive late fee from a bill
-     * 
+     *
      * @param Billing $billing
      * @param string $reason
      * @return array
@@ -371,7 +373,7 @@ class RebillingService
 
     /**
      * Calculate rebilling preview
-     * 
+     *
      * @param Billing $billing
      * @param array $adjustments
      * @return array

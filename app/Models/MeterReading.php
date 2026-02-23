@@ -82,8 +82,10 @@ class MeterReading extends Model implements Auditable
      */
     public function setReadingAttribute($value): void
     {
-        if (Schema::hasColumn($this->table, 'reading_value') &&
-            !Schema::hasColumn($this->table, 'reading')) {
+        if (
+            Schema::hasColumn($this->table, 'reading_value') &&
+            !Schema::hasColumn($this->table, 'reading')
+        ) {
             $this->attributes['reading_value'] = $value;
         } else {
             $this->attributes['reading'] = $value;
@@ -160,6 +162,30 @@ class MeterReading extends Model implements Auditable
             ->where('reading_date', '<', $this->reading_date)
             ->orderBy('reading_date', 'desc')
             ->first();
+    }
+
+    public function isEstimated(): bool
+    {
+        return in_array($this->reading_type, ['estimated', 'automatic']);
+    }
+
+    public function isActual(): bool
+    {
+        return in_array($this->reading_type, ['actual', 'manual']);
+    }
+
+    public function hasBeenBilled(): bool
+    {
+        return $this->billingDetails()->exists();
+    }
+
+    public function billingDetails()
+    {
+        return $this->hasMany(\App\Models\BillingDetail::class, 'meter_id', 'meter_id')
+            ->where(function ($query) {
+                $query->where('current_reading_value', $this->reading)
+                    ->orWhere('previous_reading_value', $this->reading);
+            });
     }
 
     /**
