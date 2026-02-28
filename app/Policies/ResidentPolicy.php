@@ -9,58 +9,74 @@ use Illuminate\Auth\Access\Response;
 class ResidentPolicy
 {
     /**
-     * Determine whether the user can view any models.
+     * View all residents
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return $user->hasRole(['admin', 'accountant']);
     }
 
     /**
-     * Determine whether the user can view the model.
+     * View specific resident
      */
     public function view(User $user, Resident $resident): bool
     {
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+        
+        if ($user->hasRole('accountant')) {
+            return $user->account_id === $resident->account_id;
+        }
+        
         return false;
     }
 
     /**
-     * Determine whether the user can create models.
+     * Create resident
      */
     public function create(User $user): bool
     {
-        return $user->role == 'admin';
+        return $user->hasRole(['admin', 'accountant']);
     }
 
     /**
-     * Determine whether the user can update the model.
+     * Update resident
      */
     public function update(User $user, Resident $resident): bool
     {
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+        
+        if ($user->hasRole('accountant')) {
+            return $user->account_id === $resident->account_id;
+        }
+        
         return false;
     }
 
     /**
-     * Determine whether the user can delete the model.
+     * Delete resident (admin only)
      */
     public function delete(User $user, Resident $resident): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can restore the model.
+     * Restore soft-deleted resident
      */
     public function restore(User $user, Resident $resident): bool
     {
-        return false;
+        return $user->hasRole('admin');
     }
 
     /**
-     * Determine whether the user can permanently delete the model.
+     * Permanently delete resident
      */
     public function forceDelete(User $user, Resident $resident): bool
     {
-        return false;
+        return $user->hasRole('admin') && $user->email === 'admin@sycharsuppliers.com';
     }
 }

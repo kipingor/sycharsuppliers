@@ -1,42 +1,101 @@
-import React from "react";
+"use client"
 
-export const Table: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="inline-block min-w-full align-middle sm:px-[--gutter] overflow-x-auto">
-    <table className="w-full min-w-full text-left text-sm/6 text-[--color-foreground] dark:text-[--color-foreground]">
-      {children}
-    </table>
-  </div>
-);
+import * as React from "react"
 
-export const TableHead: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <thead className="text-[--color-muted-foreground] dark:text-[--color-muted-foreground]">
-    {children}
-  </thead>
-);
+import { cn } from "@/lib/utils"
 
-export const TableBody: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <tbody>{children}</tbody>
-);
+function Table({ className, ...props }: React.ComponentProps<"table">) {
+  return (
+    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+      <table
+        data-slot="table"
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  )
+}
 
-export const TableRow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <tr className="hover:bg-[--color-accent]/[2.5%] dark:hover:bg-[--color-accent]/[2.5%] focus-within:outline-2 focus-within:outline-offset-3 focus-within:outline-[--color-ring] dark:focus-within:bg-[--color-accent]/[2.5%]">
-    {children}
-  </tr>
-);
+function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
+  return (
+    <thead
+      data-slot="table-header"
+      className={cn("[&_tr]:border-b", className)}
+      {...props}
+    />
+  )
+}
 
-export const TableHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <th className="border-b border-[--color-border] px-4 py-2 font-medium dark:border-[--color-border] sm:first:pl-1 sm:last:pr-1">
-    {children}
-  </th>
-);
+function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
+  return (
+    <tbody
+      data-slot="table-body"
+      className={cn("[&_tr:last-child]:border-0", className)}
+      {...props}
+    />
+  )
+}
 
-export const TableCell: React.FC<{ children: React.ReactNode; className?: string }> = ({
-  children,
-  className = "",
-}) => (
-  <td
-    className={`relative border-b border-[--color-border] dark:border-[--color-border] py-4 sm:first:pl-1 sm:last:pr-1 ${className}`}
-  >
-    {children}
-  </td>
-);
+function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
+  return (
+    <tfoot
+      data-slot="table-footer"
+      className={cn("bg-muted/50 border-t font-medium [&>tr]:last:border-b-0", className)}
+      {...props}
+    />
+  )
+}
+
+function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
+  return (
+    <tr
+      data-slot="table-row"
+      className={cn("hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors", className)}
+      {...props}
+    />
+  )
+}
+
+function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+  return (
+    <th
+      data-slot="table-head"
+      className={cn("text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0", className)}
+      {...props}
+    />
+  )
+}
+
+function TableCell({ className, ...props }: React.ComponentProps<"td">) {
+  return (
+    <td
+      data-slot="table-cell"
+      className={cn("p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0", className)}
+      {...props}
+    />
+  )
+}
+
+function TableCaption({
+  className,
+  ...props
+}: React.ComponentProps<"caption">) {
+  return (
+    <caption
+      data-slot="table-caption"
+      className={cn("text-muted-foreground mt-4 text-sm", className)}
+      {...props}
+    />
+  )
+}
+
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+}

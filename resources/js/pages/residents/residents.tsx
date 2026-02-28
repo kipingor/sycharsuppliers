@@ -1,16 +1,17 @@
-import { Head, usePage, router } from "@inertiajs/react";
+import { Head, usePage, router, Link } from "@inertiajs/react";
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from "@/types";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Trash, PlusCircle, EllipsisVertical } from "lucide-react";
+import { Pencil, Trash, PlusCircle, EllipsisVertical, Eye } from "lucide-react";
 import { DropdownMenuItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/table";
 import AddResidentModal from "@/components/residents/add-residents-modal";
 import { ResidentFormData } from "@/components/residents/add-residents-modal";
 import { toast } from "sonner";
-import Modal from "@/components/ui/modal";
+import { debounce } from "lodash";
+import Pagination from "@/components/pagination";
 
 interface Resident {
     id: number;
@@ -24,45 +25,48 @@ interface ResidentsProps {
         data: Resident[];
         links: any[];
     };
+    can: {
+        create: boolean;
+    };
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: "Residents",
-        href: "/residents",
+        href: route('residents.index'),
     },
 ];
 
-export default function Residents({ residents }: ResidentsProps) {
+export default function Residents({ residents, can }: ResidentsProps) {
     const { errors } = usePage().props;
-    // const { residents } = usePage<{ residents: { data: Resident[]; links: any } }>().props;
-
     const [search, setSearch] = useState("");
-    const [showModal, setShowModal] = useState(false);
-    const [editResident, setEditResident] = useState<Resident | null>(null);
     const [showAddResidentModal, setShowAddResidentModal] = useState(false);
+    const [editResident, setEditResident] = useState<Resident | null>(null);
+
+    const handleSearch = debounce((query: string) => {
+        router.get(route('residents.index'), { search: query }, {
+            only: ['residents'],
+            replace: true,
+            preserveState: true,
+        });
+    }, 300);
+
     const filteredResidents = residents.data.filter((c) =>
         c.name.toLowerCase().includes(search.toLowerCase())
     );
 
     const handleDelete = (id: number) => {
         if (confirm("Are you sure you want to delete this resident?")) {
-            router.delete(`/residents/${id}`);
+            router.delete(route('residents.destroy', id), {
+                preserveScroll: true,
+                onSuccess: () => {
+                    // Success handled by Inertia
+                },
+                onError: () => {
+                    alert('Failed to delete resident');
+                },
+            });
         }
-    };
-
-    const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-
-        if (editResident) {
-            router.put(`/residents/${editResident.id}`, formData);
-        } else {
-            router.post("/residents", formData);
-        }
-
-        setShowModal(false);
-        setEditResident(null);
     };
 
     const handleAddResident = (data: ResidentFormData) => {
@@ -74,7 +78,7 @@ export default function Residents({ residents }: ResidentsProps) {
         if (editResident) {
             formData.append('_method', 'PUT');
 
-            router.post(`/residents/${editResident.id}`, formData, {
+            router.post(route('residents.update', editResident.id), formData, {
                 preserveScroll: true,
                 onSuccess: () => {
                     setShowAddResidentModal(false);
@@ -87,10 +91,9 @@ export default function Residents({ residents }: ResidentsProps) {
                 }
             });
         } else {
-            router.post('/residents', formData, {
+            router.post(route('residents.store'), formData, {
                 preserveScroll: true,
                 onSuccess: () => {
-                    // Reload the page to get fresh data including the new resident
                     router.reload({ only: ['residents'] });
                     setShowAddResidentModal(false);
                 },
@@ -112,83 +115,98 @@ export default function Residents({ residents }: ResidentsProps) {
                             type="text"
                             placeholder="Search residents..."
                             value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                        />
-                        <Button
-                            onClick={() => {
-                                setEditResident(null);
-                                setShowAddResidentModal(true);
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                handleSearch(e.target.value);
                             }}
-                            className="flex items-center gap-2"
-                        >
-                            <PlusCircle size={18} />
-                            Add Resident
-                        </Button>
+                        />
+                        {can.create && (
+                            <Button
+                                onClick={() => {
+                                    setEditResident(null);
+                                    setShowAddResidentModal(true);
+                                }}
+                                className="flex items-center gap-2"
+                            >
+                                <PlusCircle size={18} />
+                                Add Resident
+                            </Button>
+                        )}
                     </div>
                 </div>
 
-                <Table>
-                    <TableHead>
-                        <TableRow>
-                        {['ID', 'Name', 'Email', 'Phone', 'Actions'].map((header) => (
-                            <TableCell key={header} className="text-left font-medium">
-                            {header}
-                            </TableCell>
-                        ))}
-                        </TableRow>
-                    </TableHead>
-                    <TableBody>
-                        {filteredResidents.map((resident) => (
-                        <TableRow key={resident.id}>
-                            <TableCell>{resident.id}</TableCell>
-                            <TableCell>{resident.name}</TableCell>
-                            <TableCell>{resident.email}</TableCell>
-                            <TableCell>{resident.phone}</TableCell>                            
-                            <TableCell>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger>
-                                <EllipsisVertical size={16} />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                <DropdownMenuItem onClick={() => console.log('View', resident.id)}>
-                                    View
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => {
-                                        setEditResident(resident);
-                                        setShowAddResidentModal(true);
-                                    }}>
-                                    <Pencil size={16} /> Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDelete(resident.id)}>
-                                    <Trash size={16} /> Delete
-                                </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            </TableCell>
-                        </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                {residents.data.length === 0 ? (
+                    <div className="text-center py-12">
+                        <p className="text-gray-500 dark:text-gray-400">No residents found.</p>
+                        {can.create && (
+                            <Button
+                                onClick={() => setShowAddResidentModal(true)}
+                                className="mt-4"
+                            >
+                                Add Your First Resident
+                            </Button>
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    {['ID', 'Name', 'Email', 'Phone', 'Actions'].map((header) => (
+                                        <TableHead key={header} className="text-left font-medium">
+                                            {header}
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {filteredResidents.map((resident) => (
+                                    <TableRow key={resident.id}>
+                                        <TableCell>{resident.id}</TableCell>
+                                        <TableCell>{resident.name}</TableCell>
+                                        <TableCell>{resident.email}</TableCell>
+                                        <TableCell>{resident.phone}</TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger>
+                                                    <EllipsisVertical size={16} />
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={route('residents.show', resident.id)}>
+                                                            <Eye size={16} className="mr-2" /> View
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={route('residents.edit', resident.id)}>
+                                                            <Pencil size={16} className="mr-2" /> Edit
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleDelete(resident.id)}>
+                                                        <Trash size={16} className="mr-2" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
 
-                {/* Pagination */}
-                <div className="mt-4 flex justify-center gap-2">
-                    {residents.links.map((link: { url: string; label: string; active: boolean }, index: number) => (
-                        <Button
-                            key={index}
-                            variant={link.active ? "default" : "outline"}
-                            onClick={() => link.url && router.get(link.url)}
-                            disabled={!link.url}
-                            dangerouslySetInnerHTML={{ __html: link.label }}
-                        />
-                    ))}
-                </div>
+                        {/* Pagination */}
+                        <Pagination links={residents.links} />
+                    </>
+                )}
 
                 {/* Add/Edit Resident Modal */}
                 <AddResidentModal
                     show={showAddResidentModal}
-                    onClose={() => setShowAddResidentModal(false)}
+                    onClose={() => {
+                        setShowAddResidentModal(false);
+                        setEditResident(null);
+                    }}
                     onSubmit={handleAddResident}
-                    initialData={editResident ?? undefined} //Pass resident data when editing
+                    initialData={editResident ?? undefined}
                 />
             </div>
         </AppLayout>

@@ -19,24 +19,16 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import type { Meter } from "@/types/models";
 
 interface AddPaymentDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    meter: {
-        id: number;
-        meter_number: string;
-        meter_name: string;
-        balance_due: number;
-        resident?: {
-            name: string;
-            email?: string;
-        };
-    };
+    meter: Meter;
 }
 
 export function AddPaymentDialog({ open, onOpenChange, meter }: AddPaymentDialogProps) {
-    const [amount, setAmount] = useState<number>(meter.balance_due);
+    const [amount, setAmount] = useState<number>(0);
     const [method, setMethod] = useState<string>("M-Pesa");
     const [transactionId, setTransactionId] = useState<string>("");
     const [paymentDate, setPaymentDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -94,11 +86,11 @@ export function AddPaymentDialog({ open, onOpenChange, meter }: AddPaymentDialog
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="resident" className="text-right">
-                                Resident
+                                Account
                             </Label>
                             <Input
-                                id="resident"
-                                value={meter.resident?.name || 'N/A'}
+                                id="account"
+                                value={meter.account?.name || 'N/A'}
                                 className="col-span-3"
                                 disabled
                             />

@@ -2,86 +2,76 @@
 
 namespace App\Mail;
 
-use App\Models\Resident;
-use App\Models\Meter;
 use App\Models\Billing;
-use App\Models\BillingDetail;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
-use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Address;
+use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use MailerSend\Helpers\Builder\Variable;
-use MailerSend\Helpers\Builder\Personalization;
-use MailerSend\LaravelDriver\MailerSendTrait;
-
 
 class BillingStatement extends Mailable
 {
-    use Queueable, SerializesModels, MailerSendTrait;    
-
-    public $total_billed;
-    public $total_paid;
-    public $balance_due;
+    use Queueable, SerializesModels;
 
     /**
-     * Create a new message instance.
+     * @param string $pdf   Raw PDF binary from Pdf::loadView(...)->output()
+     * @param Billing $billing
      */
     public function __construct(
-        public Resident $resident, 
-        public Meter $meter, 
-        public Billing $billing, 
-        public BillingDetail $details, 
-        $total_billed, 
-        $total_paid, 
-        $balance_due
-        )
-    {        
-        $this->total_billed = $total_billed;
-        $this->total_paid = $total_paid;
-        $this->balance_due = $balance_due;
-    }
+        public string $pdf,
+        public Billing $billing,
+    ) {}
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            from: new Address('sales@sycharsuppliers.com', 'Sychar Suppliers'),
-            subject: 'Billing Statement',
+            from:    new Address('sales@sycharsuppliers.com', 'Sychar Suppliers'),
+            subject: "Bill Statement #{$this->billing->id} — {$this->billing->getFormattedPeriod()}",
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
+        // details is a HasMany *collection* — load meters eagerly to avoid N+1
+        $details = $this->billing->details->map(function ($detail) {
+            return [
+                'meter_number'     => $detail->meter?->meter_number ?? 'N/A',
+                'meter_name'       => $detail->meter?->meter_name   ?? null,
+                'previous_reading' => $detail->previous_reading,
+                'current_reading'  => $detail->current_reading,
+                'units'            => $detail->units,
+                'rate'             => $detail->rate,
+                'amount'           => $detail->amount,
+                'description'      => $detail->description ?? null,
+            ];
+        });
 
         return new Content(
             markdown: 'emails.billing_statement',
             with: [
-                'resident' => $this->resident,
-                'meter' => $this->meter,
-                'billing' => $this->billing,
-                'details' => $this->details,
-                'total_billed' => $this->total_billed,
-                'total_paid' => $this->total_paid,
-                'balance_due' => $this->balance_due,
+                'account'       => $this->billing->account,
+                'billing'       => $this->billing,
+                'details'       => $details,          // collection of arrays, not models
+                'total_billed'  => $this->billing->total_amount,
+                'total_paid'    => $this->billing->paid_amount,
+                'balance_due'   => $this->billing->balance,
+                'is_overdue'    => $this->billing->isOverdue(),
+                'due_date'      => $this->billing->due_date->format('d M Y'),
+                'billing_period'=> $this->billing->getFormattedPeriod(),
             ],
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
     public function attachments(): array
     {
-        return [];
+        return [
+            // Attach the PDF binary directly — no temp file needed
+            Attachment::fromData(
+                fn () => $this->pdf,
+                "bill_statement_{$this->billing->id}.pdf"
+            )->withMime('application/pdf'),
+        ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Models\Resident;
 
 class StoreResidentRequest extends FormRequest
 {
@@ -11,7 +12,7 @@ class StoreResidentRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        return $this->user()->can('create', Resident::class);
     }
 
     /**

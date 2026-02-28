@@ -3,65 +3,87 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Meter;
-use App\Models\Billing;
-use App\Models\MeterReading;
-use App\Models\BillingDetail;
-use App\Models\Payment;
-use App\Services\EmailService;
 use App\Mail\BillingStatement;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Redirect;
-use Illuminate\Support\Facades\Storage;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Response;
 use Barryvdh\DomPDF\Facade\Pdf;
-use setasign\Fpdi\Fpdi; // Optional if merging PDFs
-
+use setasign\Fpdi\Fpdi;
 
 class MeterController extends Controller
 {
     public function index()
     {
-        return Meter::with('resident')->paginate(10);
-    }    
+        return Meter::with(['resident', 'account'])->paginate(10);
+    }
 
     public function billPayments(Meter $meter): RedirectResponse
     {
-        $meter->load(['bills.payments', 'bills.details']);
+        $meter->load([
+            'account.billings.details',
+            'account.billings.allocations.payment'
+        ]);
 
         return Redirect::back()->with('meter', $meter);
     }
 
     public function sendStatement(Meter $meter): RedirectResponse
-    {        
+    {
+        // Ensure account and resident are loaded
+        $meter->load(['resident', 'account']);
+
         $resident = $meter->resident;
         if (!$resident || !$resident->email) {
             return back()->with('error', 'Resident email not found.');
         }
 
+        if (!$meter->account) {
+            return back()->with('error', 'Meter not associated with an account.');
+        }
+
+        $account = $meter->account;
         $startDate = now()->startOfYear()->toDateString();
         $endDate = now()->toDateString();
 
-        //calculate carry forward Balabce
-        $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '!=', 'void')->sum('amount_due')) - ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
+        // Calculate carry forward balance
+        $carryForwardBillings = $account->billings()
+            ->where('created_at', '<', $startDate)
+            ->whereNotIn('status', ['voided'])
+            ->sum('total_amount');  // FIXED: was amount_due
 
-        //Get transactions from start of the year (eager-load billing details for bills)
-        $transactions = $meter->bills()
-                            ->whereBetween('created_at', [$startDate, $endDate])
-                            ->where('status', '!=', 'void')
-                            ->with('details')
-                            ->get()
-                            ->merge($meter->payments()
-                            ->whereBetween('created_at', [$startDate, $endDate])
-                            ->get());
+        $carryForwardPayments = $account->payments()
+            ->where('created_at', '<', $startDate)
+            ->where('status', 'completed')  // Only count completed payments
+            ->sum('amount');
 
-        // Determine current and previous meter readings for the statement
-        $latestReading = $meter->meterReadings()->orderBy('reading_date', 'desc')->first();
-        $currentMeterReading = $latestReading?->reading_value;
-        $previousMeterReading = $meter->meterReadings()->orderBy('reading_date', 'desc')->skip(1)->first()?->reading_value;
+        $carryForward = $carryForwardBillings - $carryForwardPayments;
+
+        // Get transactions from start of the year
+        $billings = $account->billings()
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->whereNotIn('status', ['voided'])
+            ->with('details')
+            ->get();
+
+        $payments = $account->payments()
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->get();
+
+        $transactions = $billings->merge($payments);
+
+        // Determine current and previous meter readings
+        $latestReading = $meter->readings()
+            ->orderBy('reading_date', 'desc')
+            ->first();
+
+        $currentMeterReading = $latestReading?->reading ?? null;
+
+        $previousMeterReading = $meter->readings()
+            ->orderBy('reading_date', 'desc')
+            ->skip(1)
+            ->first()?->reading ?? null;
 
         $pdf = Pdf::loadView('pdf.statement', [
             'transactions' => $transactions,
@@ -70,26 +92,50 @@ class MeterController extends Controller
             'endDate' => $endDate,
             'resident' => $resident,
             'meter' => $meter,
+            'account' => $account,  // Add account to view
             'current_meter_reading' => $currentMeterReading,
             'previous_meter_reading' => $previousMeterReading,
         ]);
 
+        // Get latest billing for this meter
+        $billing = $account->billings()
+            ->whereHas('details', function ($query) use ($meter) {
+                $query->where('meter_id', $meter->id);
+            })
+            ->latest()
+            ->first();
 
-        $billing = $meter->bills()->latest()->first();
         if (!$billing) {
             return back()->with('error', 'No billing found for this meter.');
         }
 
-        $details = $billing->details() ->first();    
+        $details = $billing->details()->where('meter_id', $meter->id)->first();
 
-        $total_billed = Billing::where('meter_id', $meter->id)->sum('amount_due');
-        $total_paid = Payment::where('meter_id', $meter->id)->sum('amount');
+        // Calculate totals for this account
+        $total_billed = $account->billings()->sum('total_amount');  // FIXED
+        $total_paid = $account->payments()
+            ->where('status', 'completed')
+            ->sum('amount');
         $balance_due = $total_billed - $total_paid;
-    
+
         // Send the email
-        $email = new BillingStatement($resident, $meter, $billing, $details, $total_billed, $total_paid, $balance_due);
-        $email->attachData($pdf->output(), 'statement-'. $resident->name . '-'. $endDate . '.pdf', ['mime' => 'application/pdf']);
-        
+        $email = new BillingStatement(
+            $resident,
+            $meter,
+            $billing,
+            $details,
+            $total_billed,
+            $total_paid,
+            $balance_due
+        );
+
+        $pdf_filename = 'statement-' . $resident->name . '-' . $endDate . '.pdf';
+        $email->attachData(
+            $pdf->output(),
+            $pdf_filename,
+            ['mime' => 'application/pdf']
+        );
+
         Mail::to($resident->email)->send($email);
 
         return Redirect::back()->with('status', 'Statement sent successfully!');
@@ -97,64 +143,66 @@ class MeterController extends Controller
 
     public function downloadAllStatements()
     {
-        // Increase execution time and reduce memory pressure for large batches
         @set_time_limit(300);
-
-        // Initialize FPDI to combine all individual PDFs into one.
         $combinedPdf = new Fpdi();
-
         $processed = 0;
 
-        // Process active meters in chunks to avoid loading everything into memory
+        // Eager load all necessary relationships
         Meter::where('status', 'active')
-            ->with(['resident', 'meterReadings' => function ($query) {
-                $query->orderBy('reading_date', 'desc');
-            }])
+            ->with([
+                'resident',
+                'account.billings.details',
+                'account.payments',
+                'readings' => function ($query) {
+                    $query->orderBy('reading_date', 'desc')->limit(2);
+                }
+            ])
             ->chunkById(25, function ($meters) use (&$combinedPdf, &$processed) {
                 foreach ($meters as $meter) {
-                    // Skip if the meter does not have an associated resident or the resident's email is missing.
-                    if (!$meter->resident || !$meter->resident->email) {
+                    if (!$meter->resident || !$meter->resident->email || !$meter->account) {
                         continue;
                     }
 
+                    $account = $meter->account;
                     $startDate = now()->startOfYear()->toDateString();
                     $endDate = now()->toDateString();
 
-                    // Calculate the carry forward balance from before the statement period.
-                    $carryForward = ($meter->bills()->where('created_at', '<', $startDate)->where('status', '!=', 'void')->sum('amount_due')) -
-                                    ($meter->payments()->where('created_at', '<', $startDate)->sum('amount'));
+                    // Calculate carry forward (from preloaded data)
+                    $carryForwardBillings = $account->billings
+                        ->where('created_at', '<', $startDate)
+                        ->whereNotIn('status', ['voided'])
+                        ->sum('total_amount');  // FIXED
 
-                    // Retrieve bills for the current period, excluding voided ones, and eager-load details.
-                    $bills = $meter->bills()
-                                    ->whereBetween('created_at', [$startDate, $endDate])
-                                    ->where('status', '!=', 'void')
-                                    ->with('details')
-                                    ->get();
+                    $carryForwardPayments = $account->payments
+                        ->where('created_at', '<', $startDate)
+                        ->where('status', 'completed')
+                        ->sum('amount');
 
-                    // Retrieve payments for the current period.
-                    $payments = $meter->payments()
-                                        ->whereBetween('created_at', [$startDate, $endDate])
-                                        ->get();
+                    $carryForward = $carryForwardBillings - $carryForwardPayments;
 
-                    // Merge bills and payments, then sort all transactions by their creation date.
-                    $transactions = $bills->merge($payments)->sortBy('created_at');
+                    // Get transactions (from preloaded data)
+                    $billings = $account->billings
+                        ->whereBetween('created_at', [$startDate, $endDate])
+                        ->whereNotIn('status', ['voided']);
 
-                    // Initialize meter reading variables.
+                    $payments = $account->payments
+                        ->whereBetween('created_at', [$startDate, $endDate]);
+
+                    $transactions = $billings->merge($payments)
+                        ->sortBy('created_at');
+
+                    // Get meter readings (from preloaded collection)
                     $currentMeterReading = null;
                     $previousMeterReading = null;
 
-                    // If meter readings exist, get the latest and the one before it from the eager-loaded collection.
-                    if ($meter->meterReadings->isNotEmpty()) {
-                        $latestMeterReadingRecord = $meter->meterReadings->first();
-                        $currentMeterReading = $latestMeterReadingRecord->reading_value;
-
-                        if ($meter->meterReadings->count() > 1) {
-                            $previousMeterReadingRecord = $meter->meterReadings->skip(1)->first();
-                            $previousMeterReading = $previousMeterReadingRecord->reading_value;
+                    if ($meter->readings->isNotEmpty()) {
+                        $currentMeterReading = $meter->readings->first()->reading ?? null;
+                        if ($meter->readings->count() > 1) {
+                            $previousMeterReading = $meter->readings->skip(1)->first()->reading ?? null;
                         }
                     }
 
-                    // Generate the PDF for the current meter's statement.
+                    // Generate PDF for this meter
                     $pdf = Pdf::loadView('pdf.statement', [
                         'transactions' => $transactions,
                         'carryForward' => $carryForward,
@@ -162,85 +210,49 @@ class MeterController extends Controller
                         'endDate' => $endDate,
                         'resident' => $meter->resident,
                         'meter' => $meter,
+                        'account' => $account,
                         'current_meter_reading' => $currentMeterReading,
                         'previous_meter_reading' => $previousMeterReading,
                     ]);
 
-                    // Save the raw PDF to a temporary file for FPDI to process.
-                    $tmpPath = storage_path('app/tmp_statement_' . $meter->id . '.pdf');
-                    file_put_contents($tmpPath, $pdf->output());
+                    // Add to combined PDF
+                    $tempFile = tempnam(sys_get_temp_dir(), 'stmt_');
+                    file_put_contents($tempFile, $pdf->output());
 
-                    // Import pages from the temporary PDF into the combined PDF.
-                    $pageCount = $combinedPdf->setSourceFile($tmpPath);
-                    for ($i = 1; $i <= $pageCount; $i++) {
-                        $tpl = $combinedPdf->importPage($i);
-                        $size = $combinedPdf->getTemplateSize($tpl);
-                        $combinedPdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
-                        $combinedPdf->useTemplate($tpl);
+                    $pageCount = $combinedPdf->setSourceFile($tempFile);
+                    for ($pageNo = 1; $pageNo <= $pageCount; $pageNo++) {
+                        $templateId = $combinedPdf->importPage($pageNo);
+                        $combinedPdf->AddPage();
+                        $combinedPdf->useTemplate($templateId);
                     }
 
-                    // Delete the temporary file after it has been processed.
-                    @unlink($tmpPath);
-
+                    unlink($tempFile);
                     $processed++;
                 }
             });
 
         if ($processed === 0) {
-            return back()->with('error', 'No statements available to download.');
+            return back()->with('error', 'No statements generated. Check if meters have residents with emails.');
         }
 
-        // Define the path for the final combined PDF.
-        $finalPdfPath = storage_path('app/all-meter-statements.pdf');
-        // Output the combined PDF to the specified file path.
-        $combinedPdf->Output($finalPdfPath, 'F');
-
-        // Return the combined PDF as a download response.
-        // The file will be deleted from storage after being sent to the user.
-        return response()->download($finalPdfPath, 'all-meter-statements-' . date('Y-m-d') . '.pdf')->deleteFileAfterSend(true);
-    }
-
-
-    public function show($id)
-    {
-        return Meter::with('resident', 'meterReadings')->findOrFail($id);
-    }
-
-    public function store(Request $request): RedirectResponse
-    {
-        $request->validate([
-            'resident_id' => 'required|exists:residents,id',
-            'meter_number' => 'required|string|unique:meters,meter_number',
-            'location' => 'nullable|string',
-            'installation_date' => 'nullable|date',
+        // Output combined PDF
+        $filename = 'all-statements-' . now()->format('Y-m-d') . '.pdf';
+        return Response::make($combinedPdf->Output('S'), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"'
         ]);
-
-        $meter = Meter::create($request->all());
-
-        return Redirect::back()->with(['message' => 'Meter added successfully', 'meter' => $meter]);
-    }
-
-    public function activate($id): RedirectResponse
-    {
-        $meter = Meter::findOrFail($id);
-        $meter->activate();
-
-        return Redirect::back()->with(['message' => 'Meter activated successfully']);
-    }
-
-    public function deactivate($id): RedirectResponse
-    {
-        $meter = Meter::findOrFail($id);
-        $meter->deactivate();
-
-        return Redirect::back()->with(['message' => 'Meter deactivated successfully']);
     }
 
     public function readingList()
     {
-        $meters = Meter::with('resident', 'meterReadings')->where('status', 'active')->get();
-        
+        $meters = Meter::with(['resident', 'account', 'readings' => function ($query) {
+            $query->latest()->limit(1);
+        }])
+            ->where('status', 'active')
+            ->get();
+
         $pdf = Pdf::loadView('pdf.meter_reading_list', compact('meters'));
-        return $pdf->download('meter_reading_list.pdf');
+
+        return $pdf->download('meter_reading_list_' . now()->format('Y-m-d') . '.pdf');
     }
 }

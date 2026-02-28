@@ -6,18 +6,27 @@ use App\Http\Requests\StoreResidentRequest;
 use App\Http\Requests\UpdateResidentRequest;
 use App\Models\Resident;
 use Inertia\Inertia;
-use Inertia\Response;
 use Illuminate\Support\Str;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Auth;
 
 class ResidentController extends Controller
 {
+    use AuthorizesRequests;
+    
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
+        // Authorize user to view residents
+        $this->authorize('viewAny', Resident::class);
+        
         return Inertia::render('residents/residents', [
             'residents' => Resident::latest()->paginate(10),
+            'can' => [
+                'create' => Auth::user()->can('create', Resident::class),
+            ],
         ]);
     }
 
@@ -26,7 +35,13 @@ class ResidentController extends Controller
      */
     public function create()
     {
-        return Inertia::render('residents/create');
+        $this->authorize('create', Resident::class);
+        
+        return Inertia::render('residents/create', [
+            'can' => [
+                'create' => Auth::user()->can('create', Resident::class),
+            ],
+        ]);
     }
 
     /**
@@ -36,7 +51,8 @@ class ResidentController extends Controller
     {
         $resident = Resident::create(array_merge($request->validated(), ['account_number' => Str::random(6)]));
 
-        return redirect()->back();
+        return redirect()->route('residents.index')
+            ->with('success', 'Resident created successfully');
     }
 
     /**
@@ -44,7 +60,15 @@ class ResidentController extends Controller
      */
     public function show(Resident $resident)
     {
-        //
+        $this->authorize('view', $resident);
+        
+        return Inertia::render('residents/show', [
+            'resident' => $resident,
+            'can' => [
+                'update' => Auth::user()->can('update', $resident),
+                'delete' => Auth::user()->can('delete', $resident),
+            ],
+        ]);
     }
 
     /**
@@ -52,9 +76,14 @@ class ResidentController extends Controller
      */
     public function edit(Resident $resident)
     {
+        $this->authorize('update', $resident);
+        
         return Inertia::render('residents/edit', [
             'resident' => $resident,
             'status' => session('status'),
+            'can' => [
+                'update' => Auth::user()->can('update', $resident),
+            ],
         ]);
     }
 
@@ -65,7 +94,8 @@ class ResidentController extends Controller
     {
         $resident->update($request->validated());
 
-        return to_route('residents.index', $resident)->with('status', 'Profile updated successfully!');
+        return redirect()->route('residents.index')
+            ->with('success', 'Resident updated successfully');
     }
 
     /**
@@ -73,15 +103,11 @@ class ResidentController extends Controller
      */
     public function destroy(Resident $resident)
     {
+        $this->authorize('delete', $resident);
+        
         $resident->delete();
 
-        return to_route('residents.index')->with('status', 'Resident deleted successfully.');
-    }
-
-    public function generateStatementToken()
-    {
-        $this->statement_token = Str::random(60); // Generate a random token
-        $this->token_expiry = now()->addHours(24); // Token expires in 24 hours
-        $this->save();
+        return redirect()->route('residents.index')
+            ->with('success', 'Resident deleted successfully');
     }
 }

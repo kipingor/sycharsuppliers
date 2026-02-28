@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Models\Resident;
 
 class UpdateResidentRequest extends FormRequest
 {
@@ -11,7 +12,8 @@ class UpdateResidentRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        $resident = $this->route('resident');
+        return $this->user()->can('update', $resident);
     }
 
     /**
@@ -21,10 +23,12 @@ class UpdateResidentRequest extends FormRequest
      */
     public function rules(): array
     {
+        $resident = $this->route('resident');
+        
         return [
             'name' => 'required|string|max:255',
-            'email' => 'nullable|string|lowercase|email|max:255|unique:residents,email,' . $this->resident->id,
-            'phone' => 'required|string|unique:residents,phone,' . $this->resident->id,
+            'email' => 'nullable|string|lowercase|email|max:255|unique:residents,email,' . $resident->id,
+            'phone' => 'required|string|unique:residents,phone,' . $resident->id,
             'address' => 'nullable|string|max:255',
         ];
     }

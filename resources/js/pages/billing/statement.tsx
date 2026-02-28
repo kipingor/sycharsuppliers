@@ -26,6 +26,8 @@ interface StatementProps extends PageProps {
             id: number; // Added id property
             amount: string;
             status: number;
+            paid_amount: number;
+            issued_at: Date;
             current_reading: number;
             previous_reading: number;
         }>;
@@ -85,13 +87,13 @@ export default function Statement({ meter, totalDue, totalPaid, balance }: State
                                 <TableBody>
                                     {meter.bills.map((bill) => (
                                         <TableRow key={bill.id}>
-                                            <TableCell>{new Date(bill.billing_date).toLocaleDateString()}</TableCell>
+                                            <TableCell>{new Date(bill.issued_at).toLocaleDateString()}</TableCell>
                                             <TableCell>{bill.amount}</TableCell>
                                             <TableCell>{formatCurrency(Number(bill.amount))}</TableCell> {/* Fixed: Convert string to number for formatCurrency */}
                                             <TableCell>{formatCurrency(bill.paid_amount)}</TableCell>
                                             <TableCell>{bill.status}</TableCell>
                                             <TableCell>
-                                                {bill.readings[0]?.reading_value || 'N/A'}
+                                                {bill.current_reading || 'N/A'}
                                             </TableCell>
                                         </TableRow>
                                     ))}
