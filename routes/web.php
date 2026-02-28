@@ -22,25 +22,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('accounts', AccountController::class);
     Route::post('accounts/generate-from-residents', [AccountController::class, 'generateFromResidents'])
-        ->name('accounts.generate-from-residents');    
+        ->name('accounts.generate-from-residents');
 
     Route::prefix('accounts/{account}')->name('accounts.')->group(function () {
-        Route::get('/statement',          [AccountStatementController::class, 'show'])->name('statement');
+        Route::get('/statement', [AccountStatementController::class, 'show'])->name('statement');
         Route::get('/statement/download', [AccountStatementController::class, 'download'])->name('statement.download');
-        Route::post('/statement/send',    [AccountStatementController::class, 'send'])->name('statement.send');
+        Route::post('/statement/send', [AccountStatementController::class, 'send'])->name('statement.send');
     });
 
     Route::resource('residents', ResidentController::class);
     Route::resource('expenses', \App\Http\Controllers\ExpenseController::class);
     Route::resource('employees', \App\Http\Controllers\EmployeeController::class);
 
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
     Route::prefix('reports')->name('reports.')->group(function () {
-        Route::get('/',            [ReportsController::class, 'index'])->name('index');
-        Route::get('/tax',         [ReportsController::class, 'taxReport'])->name('tax');
+        Route::get('/', [ReportsController::class, 'index'])->name('index');
+        Route::get('/tax', [ReportsController::class, 'taxReport'])->name('tax');
         Route::get('/tax/download', [ReportsController::class, 'downloadTaxReport'])->name('tax.download');
     });
 });
