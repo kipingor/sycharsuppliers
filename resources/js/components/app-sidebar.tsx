@@ -9,16 +9,16 @@ import { BookOpen, DollarSign, FileChartColumnIncreasing, Folder, Gauge, LayoutG
 import AppLogo from './app-logo';
 
 const footerNavItems: NavItem[] = [
-    {
-        title: 'Repository',
-        url: 'https://github.com/laravel/react-starter-kit',
-        icon: Folder,
-    },
-    {
-        title: 'Documentation',
-        url: 'https://laravel.com/docs/starter-kits',
-        icon: BookOpen,
-    },
+    // {
+    //     title: 'Repository',
+    //     url: 'https://github.com/laravel/react-starter-kit',
+    //     icon: Folder,
+    // },
+    // {
+    //     title: 'Documentation',
+    //     url: 'https://laravel.com/docs/starter-kits',
+    //     icon: BookOpen,
+    // },
 ];
 
 export function AppSidebar() {
@@ -93,13 +93,13 @@ export function AppSidebar() {
     }
 
     // Add Expenses if user can view
-    if (auth.can?.expense?.viewAny) {
-        mainNavItems.push({
-            title: 'Expenses',
-            url: route('expenses.index'),
-            icon: DollarSign,
-        });
-    }
+    // if (auth.can?.expense?.viewAny) {
+    //     mainNavItems.push({
+    //         title: 'Expenses',
+    //         url: route('expenses.index'),
+    //         icon: DollarSign,
+    //     });
+    // }
 
     // Add Reports (typically available to all authenticated users)
     mainNavItems.push({
