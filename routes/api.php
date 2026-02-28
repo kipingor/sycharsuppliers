@@ -70,8 +70,6 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         // Account-specific
         Route::get('/account/{account}/history', [PaymentController::class, 'accountHistory'])->name('account.history');
     });
-
-    Route::get('/meters/reading-list/download', [MeterController::class, 'readingList'])
-        ->name('meters.reading-list.download');
+    
 });
 

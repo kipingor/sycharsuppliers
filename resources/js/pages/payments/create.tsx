@@ -42,12 +42,11 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const defaultPaymentMethods: PaymentMethod[] = [
-    { value: 'cash', label: 'Cash' },
-    { value: 'mpesa', label: 'M-Pesa' },
-    { value: 'bank_transfer', label: 'Bank Transfer' },
-    { value: 'cheque', label: 'Cheque' },
-    { value: 'card', label: 'Card' },
-    { value: 'other', label: 'Other' },
+    { value: 'Cash', label: 'Cash' },
+    { value: 'M-Pesa', label: 'M-Pesa' },
+    { value: 'Bank Transfer', label: 'Bank Transfer' },
+    { value: 'Cheque', label: 'Cheque' },
+    { value: 'Card', label: 'Card' },
 ];
 
 export default function CreatePayment() {
@@ -160,7 +159,7 @@ export default function CreatePayment() {
                                         <Input
                                             id="amount"
                                             type="number"
-                                            step="0.01"
+                                            step="1.00"
                                             min="0"
                                             value={data.amount}
                                             onChange={(e) => setData('amount', e.target.value)}

@@ -33,7 +33,8 @@ class PaymentController extends Controller
 
     public function __construct(
         protected PaymentReconciliationService $reconciliationService
-    ) {}
+    ) {
+    }
 
     /**
      * Display a listing of payments
@@ -98,7 +99,7 @@ class PaymentController extends Controller
                     $q->where('status', '!=', 'paid');
                 }])
                 ->get()
-                ->map(fn($acc) => [
+                ->map(fn ($acc) => [
                     'id' => $acc->id,
                     'name' => $acc->name,
                     'account_number' => $acc->account_number,
@@ -396,7 +397,7 @@ class PaymentController extends Controller
             PaymentAllocation::create([
                 'payment_id' => $payment->id,
                 'billing_id' => $bill->id,
-                'amount_allocated' => $allocationAmount,
+                'allocated_amount' => $allocationAmount,
             ]);
 
             // Update bill paid amount
@@ -447,11 +448,11 @@ class PaymentController extends Controller
     protected function getPaymentMethods(): array
     {
         return [
-            ['value' => 'cash', 'label' => 'Cash'],
-            ['value' => 'bank_transfer', 'label' => 'Bank Transfer'],
-            ['value' => 'mpesa', 'label' => 'M-Pesa'],
-            ['value' => 'card', 'label' => 'Card'],
-            ['value' => 'cheque', 'label' => 'Cheque'],
+            ['value' => 'Cash', 'label' => 'Cash'],
+            ['value' => 'Bank Transfer', 'label' => 'Bank Transfer'],
+            ['value' => 'M-Pesa', 'label' => 'M-Pesa'],
+            ['value' => 'Card', 'label' => 'Card'],
+            ['value' => 'Cheque', 'label' => 'Cheque'],
         ];
     }
 

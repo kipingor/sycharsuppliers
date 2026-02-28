@@ -10,6 +10,7 @@ import {
     TableBody, 
     TableCell, 
     TableHead, 
+    TableHeader, 
     TableRow 
 } from "@/components/table";
 import { 
@@ -236,15 +237,15 @@ export default function MeterReadings() {
                 ) : (
                     <>
                         <Table>
-                            <TableHead>
+                            <TableHeader>
                                 <TableRow>
                                     {["ID", "Meter", "Date", "Reading", "Consumption", "Type", "Actions"].map((header) => (
-                                        <TableCell key={header} className="text-left font-medium">
+                                        <TableHead key={header} className="text-left font-medium">
                                             {header}
-                                        </TableCell>
+                                        </TableHead>
                                     ))}
                                 </TableRow>
-                            </TableHead>
+                            </TableHeader>
                             <TableBody>
                                 {readings.data.map((reading) => (
                                     <TableRow key={reading.id}>

@@ -25,7 +25,7 @@ interface Bill {
 interface Allocation {
     id: number;
     billing_id: number;
-    amount_allocated: number;
+    allocated_amount: number;
     billing?: Bill;
 }
 
@@ -103,7 +103,7 @@ export default function PaymentShow() {
         }
     };
 
-    const totalAllocated = allocations.reduce((sum, alloc) => sum + Number(alloc.amount_allocated), 0);
+    const totalAllocated = allocations.reduce((sum, alloc) => sum + Number(alloc.allocated_amount), 0);
     const unallocated = Number(payment.amount) - totalAllocated;
 
     return (
@@ -255,15 +255,15 @@ export default function PaymentShow() {
 
                         {allocations && allocations.length > 0 ? (
                             <Table>
-                                <TableHead>
+                                <TableHeader>
                                     <TableRow>
-                                        <TableCell>Bill #</TableCell>
-                                        <TableCell>Period</TableCell>
-                                        <TableCell className="text-right">Bill Amount</TableCell>
-                                        <TableCell className="text-right">Allocated</TableCell>
-                                        <TableCell>Status</TableCell>
+                                        <TableHead>Bill #</TableHead>
+                                        <TableHead>Period</TableHead>
+                                        <TableHead className="text-right">Bill Amount</TableHead>
+                                        <TableHead className="text-right">Allocated</TableHead>
+                                        <TableHead>Status</TableHead>
                                     </TableRow>
-                                </TableHead>
+                                </TableHeader>
                                 <TableBody>
                                     {allocations.map((allocation) => (
                                         <TableRow key={allocation.id}>
@@ -284,7 +284,7 @@ export default function PaymentShow() {
                                                     : 'N/A'}
                                             </TableCell>
                                             <TableCell className="text-right font-medium">
-                                                {formatCurrency(allocation.amount_allocated)}
+                                                {formatCurrency(allocation.allocated_amount)}
                                             </TableCell>
                                             <TableCell>
                                                 {allocation.billing?.status && (

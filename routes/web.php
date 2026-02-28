@@ -5,6 +5,7 @@ use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AccountStatementController;
 use App\Http\Controllers\StatementController;
 use App\Http\Requests\StoreBillingRequest;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
@@ -16,20 +17,20 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    require __DIR__.'/billing.php';
+    require __DIR__ . '/billing.php';
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::resource('accounts', AccountController::class);
     Route::post('accounts/generate-from-residents', [AccountController::class, 'generateFromResidents'])
-        ->name('accounts.generate-from-residents');
+        ->name('accounts.generate-from-residents');    
 
-    Route::prefix('accounts/{account}/statements')->group(function () {
-        Route::get('/download', [StatementController::class, 'download'])->name('statements.download');
-        Route::post('/email', [StatementController::class, 'email'])->name('statements.email');
-    });    
-    
+    Route::prefix('accounts/{account}')->name('accounts.')->group(function () {
+        Route::get('/statement',          [AccountStatementController::class, 'show'])->name('statement');
+        Route::get('/statement/download', [AccountStatementController::class, 'download'])->name('statement.download');
+        Route::post('/statement/send',    [AccountStatementController::class, 'send'])->name('statement.send');
+    });
+
     Route::resource('residents', ResidentController::class);
-    Route::resource('reports', ReportsController::class)->middleware([HandlePrecognitiveRequests::class]);
     Route::resource('expenses', \App\Http\Controllers\ExpenseController::class);
     Route::resource('employees', \App\Http\Controllers\EmployeeController::class);
 
@@ -37,12 +38,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::prefix('accounts/{account}/statements')->group(function () {
-        Route::get('download', [\App\Http\Controllers\StatementController::class, 'download'])->name('statements.download');
-        Route::post('email', [\App\Http\Controllers\StatementController::class, 'email'])->name('statements.email');
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/',            [ReportsController::class, 'index'])->name('index');
+        Route::get('/tax',         [ReportsController::class, 'taxReport'])->name('tax');
+        Route::get('/tax/download', [ReportsController::class, 'downloadTaxReport'])->name('tax.download');
     });
-
 });
 
-require __DIR__.'/settings.php';
-require __DIR__.'/auth.php';
+require __DIR__ . '/settings.php';
+require __DIR__ . '/auth.php';

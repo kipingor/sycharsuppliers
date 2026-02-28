@@ -217,7 +217,7 @@ class BillingService
             'billing_id' => $billing->id,
             'meter_id' => $meter->id,
             'previous_reading_value' => $previousReadingValue,
-            'current_reading_value' => $currentReading->reading_value,
+            'current_reading_value' => $currentReading->reading,
             'units_used' => $consumption,
             'rate' => $charges['average_rate'],
             'amount' => $charges['total'],

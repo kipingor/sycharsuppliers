@@ -13,6 +13,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Auth;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 /**
  * Meter Controller
@@ -432,5 +433,59 @@ class MeterController extends Controller
         fclose($output);
 
         return $csv;
+    }
+
+    /**
+     * Download a reading list PDF/CSV for field officers
+     * Lists all active meters with last reading info — ready for data collection
+     */
+    public function downloadReadingList(Request $request)
+    {
+        $this->authorize('viewAny', \App\Models\Meter::class);
+
+        $meters = \App\Models\Meter::active()
+            ->with(['account:id,name,account_number', 'readings' => function ($q) {
+                $q->latest('reading_date')->limit(1);
+            }])
+            ->orderBy('meter_number')
+            ->get();
+
+        $output = fopen('php://temp', 'r+');
+        fputcsv($output, [
+            'Meter Number',
+            'Meter Name',
+            'Account Number',
+            'Account Name',
+            'Last Reading',
+            'Last Reading Date',
+            'Current Reading',
+            'Notes',
+        ]);
+
+        foreach ($meters as $meter) {
+            $lastReading = $meter->readings->first();
+            fputcsv($output, [
+                $meter->meter_number,
+                $meter->meter_name,
+                optional($meter->account)->account_number ?? '',
+                optional($meter->account)->name ?? '',
+                $lastReading?->reading_value ?? '',
+                $lastReading?->reading_date?->format('Y-m-d') ?? '',
+                '', // blank for field entry
+                '', // blank for notes
+            ]);
+        }
+
+        rewind($output);
+        $csv = stream_get_contents($output);
+        fclose($output);
+
+        $filename = 'reading_list_' . now()->format('Y_m_d') . '.csv';
+
+        return response()->streamDownload(
+            fn () => print($csv),
+            $filename,
+            ['Content-Type' => 'text/csv']
+        );
     }
 }

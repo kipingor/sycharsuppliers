@@ -21,8 +21,8 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('settings/appearance');
     })->name('appearance');
     Route::get('settings/users', [UserController::class, 'index'])->name('settings.users.index');
-    Route::post('settings/users', [UserController::class, 'store']);
-    Route::patch('settings/users', [UserController::class, 'update']);
-    Route::delete('settings/users', [UserController::class, 'destroy']);
-    // Route::get('settings/users', [SettingsController::class, 'index'])->name('users');    
+    Route::post('settings/users', [UserController::class, 'store'])->name('settings.users.store');
+    Route::patch('settings/users/{user}', [UserController::class, 'update'])->name('settings.users.update');
+    Route::delete('settings/users/{user}', [UserController::class, 'destroy'])->name('settings.users.destroy');
+    // Route::get('settings/users', [SettingsController::class, 'index'])->name('users');
 });

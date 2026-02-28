@@ -1,7 +1,5 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\DTOs;
 
 use App\Models\Billing;
@@ -25,7 +23,7 @@ readonly class ReconciliationResult
         public float $remainingAmount,
         public ?CarryForwardBalance $carryForward,
         public Collection $updatedBills, // Collection of Billing
-        public array $balanceSnapshot
+        public float $balanceSnapshot
     ) {}
 
     /**

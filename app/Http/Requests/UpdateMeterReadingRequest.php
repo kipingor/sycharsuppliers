@@ -8,9 +8,9 @@ use Illuminate\Validation\Rule;
 
 /**
  * Update Meter Reading Request
- * 
+ *
  * Validates meter reading updates with strict business rules.
- * 
+ *
  * @package App\Http\Requests
  */
 class UpdateMeterReadingRequest extends FormRequest
@@ -50,7 +50,7 @@ class UpdateMeterReadingRequest extends FormRequest
             'reading_type' => [
                 'sometimes',
                 'required',
-                Rule::in(['actual', 'estimated', 'calculated']),
+                Rule::in(['actual', 'estimated', 'calculated', 'correction']),
             ],
             'notes' => [
                 'nullable',
@@ -75,7 +75,8 @@ class UpdateMeterReadingRequest extends FormRequest
 
             // Check if reading has been distributed (for bulk meters)
             if ($reading->is_distributed) {
-                $validator->errors()->add('reading_value', 
+                $validator->errors()->add(
+                    'reading_value',
                     'Cannot update reading that has been distributed to sub-meters'
                 );
             }
@@ -107,6 +108,7 @@ class UpdateMeterReadingRequest extends FormRequest
 
     /**
      * Validate reading is not used in billing
+     * Admins get a warning via flash, non-admins get a hard error
      */
     protected function validateNotUsedInBilling($validator, MeterReading $reading): void
     {
@@ -117,18 +119,13 @@ class UpdateMeterReadingRequest extends FormRequest
             })
             ->exists();
 
-        if ($hasBeenBilled) {
-            // Only admins can update billed readings
-            if (!$this->user()->can('update', $reading)) {
-                $validator->errors()->add('reading_value', 
-                    'Cannot update reading that has been used in billing'
-                );
-            } else {
-                $validator->errors()->add('reading_value', 
-                    'Warning: This reading has been used in billing. Updating it may affect bills.'
-                );
-            }
+        if ($hasBeenBilled && !$this->user()->can('update', $reading)) {
+            $validator->errors()->add(
+                'reading_value',
+                'Cannot update reading that has been used in billing'
+            );
         }
+        // Admins can override — warning shown via controller flash message instead
     }
 
     /**
@@ -149,11 +146,13 @@ class UpdateMeterReadingRequest extends FormRequest
             $difference = $previousReading->reading_value - $newReading;
             
             if ($difference > 1000) {
-                $validator->errors()->add('reading_value', 
+                $validator->errors()->add(
+                    'reading_value',
                     'New reading is significantly lower than previous reading. Appears to be a meter reset.'
                 );
             } else {
-                $validator->errors()->add('reading_value', 
+                $validator->errors()->add(
+                    'reading_value',
                     sprintf(
                         'New reading (%s) is lower than previous reading (%s)',
                         $newReading,
@@ -170,7 +169,8 @@ class UpdateMeterReadingRequest extends FormRequest
             ->first();
 
         if ($nextReading && $newReading > $nextReading->reading_value) {
-            $validator->errors()->add('reading_value', 
+            $validator->errors()->add(
+                'reading_value',
                 sprintf(
                     'New reading (%s) is higher than next reading (%s)',
                     $newReading,
@@ -179,20 +179,21 @@ class UpdateMeterReadingRequest extends FormRequest
             );
         }
 
-        // Check for unreasonable consumption change
+        // Check for unreasonable consumption change only when average exists
         if ($previousReading) {
-            $oldConsumption = $reading->reading_value - $previousReading->reading_value;
-            $newConsumption = $newReading - $previousReading->reading_value;
-            $change = abs($newConsumption - $oldConsumption);
-
-            if ($change > ($meter->getAverageMonthlyConsumption() * 2)) {
-                $validator->errors()->add('reading_value', 
-                    sprintf(
-                        'Reading change affects consumption significantly (old: %s, new: %s units)',
-                        round($oldConsumption, 2),
-                        round($newConsumption, 2)
-                    )
-                );
+            $avgConsumption = $meter->getAverageMonthlyConsumption();
+            if ($avgConsumption > 0) {
+                $newConsumption = $newReading - $previousReading->reading_value;
+                if ($newConsumption > ($avgConsumption * 5)) {
+                    $validator->errors()->add(
+                        'reading_value',
+                        sprintf(
+                            'Consumption (%s units) is significantly higher than average (%s units). Please verify.',
+                            round($newConsumption, 2),
+                            round($avgConsumption, 2)
+                        )
+                    );
+                }
             }
         }
     }
@@ -212,7 +213,8 @@ class UpdateMeterReadingRequest extends FormRequest
             ->first();
 
         if ($existingOnDate) {
-            $validator->errors()->add('reading_date', 
+            $validator->errors()->add(
+                'reading_date',
                 'Another reading already exists for this date'
             );
         }
@@ -232,13 +234,15 @@ class UpdateMeterReadingRequest extends FormRequest
 
         // Validate reading value still makes sense with new date
         if ($previousReading && $reading->reading_value < $previousReading->reading_value) {
-            $validator->errors()->add('reading_date', 
+            $validator->errors()->add(
+                'reading_date',
                 'Date change places this reading after a higher reading'
             );
         }
 
         if ($nextReading && $reading->reading_value > $nextReading->reading_value) {
-            $validator->errors()->add('reading_date', 
+            $validator->errors()->add(
+                'reading_date',
                 'Date change places this reading before a lower reading'
             );
         }
@@ -253,28 +257,32 @@ class UpdateMeterReadingRequest extends FormRequest
 
         // Cannot change to calculated unless it's a sub-meter
         if ($newType === 'calculated' && !$reading->meter->isSubMeter()) {
-            $validator->errors()->add('reading_type', 
+            $validator->errors()->add(
+                'reading_type',
                 'Only sub-meter readings can be marked as calculated'
             );
         }
 
         // Cannot change from calculated if distributed
         if ($reading->reading_type === 'calculated' && $reading->parent_reading_id) {
-            $validator->errors()->add('reading_type', 
+            $validator->errors()->add(
+                'reading_type',
                 'Cannot change type of distributed reading'
             );
         }
 
         // Warn if changing from actual to estimated
         if ($reading->reading_type === 'actual' && $newType === 'estimated') {
-            $validator->errors()->add('reading_type', 
+            $validator->errors()->add(
+                'reading_type',
                 'Changing from actual to estimated. Please provide reason in notes.'
             );
         }
 
         // Check permission for estimated readings
         if ($newType === 'estimated' && !$this->user()->can('createEstimated', MeterReading::class)) {
-            $validator->errors()->add('reading_type', 
+            $validator->errors()->add(
+                'reading_type',
                 'You do not have permission to mark readings as estimated'
             );
         }

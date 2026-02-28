@@ -1,35 +1,53 @@
 <x-mail::message>
 # Your Latest Billing Statement
 
-Dear {{ $resident->name }},
+Dear {{ $account->name }},
 
-We hope this message finds you well! Here's your most recent billing update for your water meter **{{ $meter->meter_number }}** located at **{{ $meter->location }}**.
+We hope this message finds you well! Here is your most recent billing update
+for **{{ $billing_period }}**.
 
 <x-mail::panel>
-- **Latest Billing Amount:** KES {{ number_format($billing->amount_due, 2) }}  
-- **Last Meter Reading:** {{ $details->previous_reading_value ?? 'N/A' }}  
-- **Current Reading:** {{ $details->current_reading_value ?? 'N/A' }}  
-- **Units Used Since Last Reading:** {{ $details->units_used ?? 'N/A' }}  
-- **Total Amount Billed to Date:** KES {{ number_format($total_billed, 2) }}  
-- **Total Payments Made:** KES {{ number_format($total_paid, 2) }}  
-- **🔴 Outstanding Balance:** <strong>KES {{ number_format($balance_due, 2) }}</strong>
+@foreach ($details as $detail)
+**Meter: {{ $detail['meter_number'] }}**@if($detail['meter_name']) — {{ $detail['meter_name'] }}@endif
 
-Please find attached your account statement from the beginning of the year.
+| | |
+|---|---|
+| Previous Reading | {{ $detail['previous_reading'] }} m³ |
+| Current Reading | {{ $detail['current_reading'] }} m³ |
+| Units Used | {{ $detail['units'] }} m³ |
+| Rate | KES {{ number_format($detail['rate'], 2) }} |
+| Amount | KES {{ number_format($detail['amount'], 2) }} |
+
+@endforeach
+</x-mail::panel>
+
+<x-mail::panel>
+| | |
+|---|---|
+| **Total Billed** | KES {{ number_format($total_billed, 2) }} |
+| **Total Paid** | KES {{ number_format($total_paid, 2) }} |
+| **Due Date** | {{ $due_date }} |
+| **Outstanding Balance** | **KES {{ number_format($balance_due, 2) }}** |
 </x-mail::panel>
 
 @if ($balance_due <= 0)
-🎉 Fantastic news! Your account is up to date and there’s no outstanding balance. Thank you for staying current with your payments — we truly appreciate it!
+🎉 **Your account is fully up to date!** There is no outstanding balance.
+Thank you for staying current with your payments — we truly appreciate it!
 @else
-Please review your balance above and make a payment at your earliest convenience. If you have already made a payment that’s not reflected yet, kindly ignore this message.
+@if ($is_overdue)
+⚠️ **This bill is overdue.** Please make a payment as soon as possible to
+avoid service interruption.
+@else
+Please review your balance above and make a payment before **{{ $due_date }}**.
+If you have already made a payment that is not reflected yet, kindly ignore this message.
+@endif
 @endif
 
-<x-mail::button :url="route('billing.statement', ['meter' => $meter->id])">
-View Full Statement
-</x-mail::button>
+Your full statement is attached to this email as a PDF.
 
-Thank you for being a valued Sychar Suppliers customer!  
-We’re always here to serve you with excellence.
+Thank you for being a valued {{ config('app.name') }} customer!
+We are always here to serve you with excellence.
 
-Warm regards,  
+Warm regards,
 **{{ config('app.name') }}**
 </x-mail::message>

@@ -50,12 +50,11 @@ interface EditPaymentPageProps {
 }
 
 const defaultPaymentMethods: PaymentMethod[] = [
-    { value: 'cash', label: 'Cash' },
-    { value: 'mpesa', label: 'M-Pesa' },
-    { value: 'bank_transfer', label: 'Bank Transfer' },
-    { value: 'cheque', label: 'Cheque' },
-    { value: 'card', label: 'Card' },
-    { value: 'other', label: 'Other' },
+    { value: 'Cash', label: 'Cash' },
+    { value: '-Pesa', label: 'M-Pesa' },
+    { value: 'Bank Transfer', label: 'Bank Transfer' },
+    { value: 'Cheque', label: 'Cheque' },
+    { value: 'Card', label: 'Card' },
 ];
 
 export default function EditPayment() {

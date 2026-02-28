@@ -28,7 +28,7 @@ class AccountStatementMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Water Building Statement',
+            subject: 'Water Billing Statement',
         );
     }
 

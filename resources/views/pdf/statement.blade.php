@@ -47,7 +47,7 @@
     <table style="border: none">
         <tr style="border: none">
             <td style="border: none; width: 30%">
-                <img src="{{ public_path('logo.png') }}" style="width: 100%" alt="Logo">
+                <img src="{{ $company['logo'] ?? public_path('logo.png') }}" style="width: 100%" alt="Logo">
             </td>
             <td style="border: none; width: 70%">
                 <h2>Water Billing Statement</h2>

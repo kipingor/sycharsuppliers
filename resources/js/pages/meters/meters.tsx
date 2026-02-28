@@ -15,7 +15,7 @@ import { AddBillDialog } from '@/components/meters/add-bill-dialog';
 import { AddPaymentDialog } from '@/components/meters/add-payment-dialog';
 import MeterModal from '@/components/meters/meter-modal';
 import Pagination from '@/components/pagination';
-import { Table, TableBody, TableCell, TableHead, TableRow } from '@/components/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SlideOver, SlideOverBody, SlideOverHeader, SlideOverPanel } from '@/components/ui/slide-over';
 import { formatCurrency } from '@/lib/utils';
@@ -195,16 +195,11 @@ export default function Meters() {
                             onChange={(e) => handleSearch(e.target.value)}
                         />
                         {can.create && (
-                            <Button
-                                onClick={() => {
-                                    setEditMeter(null);
-                                    setShowMeterModal(true);
-                                }}
-                                className="flex items-center gap-2"
-                            >
-                                <PlusCircle size={18} />
-                                Add Meter
-                            </Button>
+                            <Link href={route('meters.create')}>
+                                <Button className="flex items-center gap-2">
+                                    <PlusCircle size={18} /> Add Meter
+                                </Button>
+                            </Link>
                         )}
                         <Button
                             variant="outline"
@@ -223,23 +218,25 @@ export default function Meters() {
                     <div className="py-12 text-center">
                         <p className="text-gray-500 dark:text-gray-400">No meters found.</p>
                         {can.create && (
-                            <Button onClick={() => setShowMeterModal(true)} className="mt-4">
-                                Add Your First Meter
-                            </Button>
+                            <Link href={route('meters.create')}>
+                                <Button className="flex items-center gap-2 mt-4">
+                                    <PlusCircle size={18} /> Add Your First Meter
+                                </Button>
+                            </Link>
                         )}
                     </div>
                 ) : (
                     <>
                         <Table>
-                            <TableHead>
+                            <TableHeader>
                                 <TableRow>
                                     {['ID', 'Meter Number', 'Meter Name', 'Account', 'Status', 'Actions'].map((header) => (
-                                        <TableCell key={header} className="text-left text-xs font-medium">
+                                        <TableHead key={header} className="text-left text-xs font-medium">
                                             {header}
-                                        </TableCell>
+                                        </TableHead>
                                     ))}
                                 </TableRow>
-                            </TableHead>
+                            </TableHeader>
                             <TableBody>
                                 {meters.data.map((meter) => (
                                     <TableRow key={meter.id}>

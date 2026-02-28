@@ -150,15 +150,15 @@ export default function Residents({ residents, can }: ResidentsProps) {
                 ) : (
                     <>
                         <Table>
-                            <TableHead>
+                            <TableHeader>
                                 <TableRow>
                                     {['ID', 'Name', 'Email', 'Phone', 'Actions'].map((header) => (
-                                        <TableCell key={header} className="text-left font-medium">
+                                        <TableHead key={header} className="text-left font-medium">
                                             {header}
-                                        </TableCell>
+                                        </TableHead>
                                     ))}
                                 </TableRow>
-                            </TableHead>
+                            </TableHeader>
                             <TableBody>
                                 {filteredResidents.map((resident) => (
                                     <TableRow key={resident.id}>

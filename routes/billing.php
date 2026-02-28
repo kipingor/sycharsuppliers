@@ -4,6 +4,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\MeterController;
 use App\Http\Controllers\MeterReadingController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\CreditNoteController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -44,6 +45,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Export
         Route::get('/export/csv', [BillingController::class, 'export'])->name('export');
+
+        // Apply credit note to a specific bill (POST from billing show page)
+        Route::post('/{billing}/credit-notes', [CreditNoteController::class, 'store'])
+            ->name('credit-notes.store');
     });
 
     // ========================================
@@ -83,7 +88,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/{meter}', [MeterController::class, 'destroy'])->name('destroy');
         Route::get('/{meter}/edit', [MeterController::class, 'edit'])->name('edit');
         Route::get('/reading-list/download', [MeterController::class, 'downloadReadingList'])
-            ->name('meters.reading-list.download');
+            ->name('reading-list.download');
+
+        // Route::get('/reading-list/download', [MeterController::class, 'readingList'])
+        // ->name('meters.reading-list.download');
 
         // Bulk meter actions
         Route::post('/{meter}/adjust-allocations', [MeterController::class, 'adjustAllocations'])->name('adjust-allocations');
@@ -113,6 +121,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Export
         Route::get('/export', [MeterReadingController::class, 'export'])
-    ->name('export');
+            ->name('export');
+    });
+
+    // ========================================
+    // Credit Notes Routes
+    // ========================================
+    // Credit notes list
+
+    Route::prefix('credit-notes')->name('credit-notes.')->group(function () {
+        Route::get('/', [CreditNoteController::class, 'index'])->name('index');
+
+        // Void a credit note
+        Route::post('/{creditNote}/void', [CreditNoteController::class, 'void'])
+            ->name('void');
     });
 });

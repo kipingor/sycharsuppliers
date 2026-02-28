@@ -143,7 +143,7 @@ class StoreMeterReadingRequest extends FormRequest
 
                 // If difference is huge, likely meter was reset
                 if ($difference > 1000) {
-                    $validator->warnings()->add(
+                    $validator->errors()->add(
                         'reading_value',
                         'Reading is lower than previous reading. This appears to be a meter reset. Please confirm.'
                     );
@@ -164,7 +164,7 @@ class StoreMeterReadingRequest extends FormRequest
             $avgConsumption = $meter->getAverageMonthlyConsumption();
 
             if ($avgConsumption > 0 && $consumption > ($avgConsumption * 5)) {
-                $validator->warnings()->add(
+                $validator->errors()->add(
                     'reading_value',
                     sprintf(
                         'Consumption (%s units) is significantly higher than average (%s units). Please verify.',
@@ -221,7 +221,7 @@ class StoreMeterReadingRequest extends FormRequest
             ->first();
 
         if ($latestReading && $this->reading_date < $latestReading->reading_date->toDateString()) {
-            $validator->warnings()->add(
+            $validator->errors()->add(
                 'reading_date',
                 'Reading date is earlier than the most recent reading. This will be treated as a historical reading.'
             );
@@ -243,7 +243,7 @@ class StoreMeterReadingRequest extends FormRequest
 
         // Estimated readings should have notes explaining estimation
         if (empty($this->notes)) {
-            $validator->warnings()->add(
+            $validator->errors()->add(
                 'notes',
                 'Please provide notes explaining why this reading is estimated'
             );

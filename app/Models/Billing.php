@@ -14,10 +14,10 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Billing Model
- * 
+ *
  * Represents a bill for an account for a specific billing period.
  * Contains aggregated charges from multiple meters/services.
- * 
+ *
  * @property int $id
  * @property int $account_id
  * @property string $billing_period (format: YYYY-MM)
@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\DB;
  * @property \Carbon\Carbon|null $paid_at
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
- * 
+ *
  * @property-read Account $account
  * @property-read \Illuminate\Database\Eloquent\Collection|BillingDetail[] $details
  * @property-read \Illuminate\Database\Eloquent\Collection|PaymentAllocation[] $allocations
@@ -124,6 +124,20 @@ class Billing extends Model implements Auditable
         );
     }
 
+    /**
+     * Payments recorded directly against this bill via payments.billing_id
+     * (as opposed to through payment_allocations)
+     */
+    public function directPayments(): HasMany
+    {
+        return $this->hasMany(Payment::class, 'billing_id');
+    }
+
+    public function creditNotes(): HasMany
+    {
+        return $this->hasMany(CreditNote::class);
+    }
+
     /* =========================
      | Scopes
      |========================= */
@@ -175,26 +189,52 @@ class Billing extends Model implements Auditable
 
     /**
      * Get total paid amount from allocations
-     * 
+     *
      * @return float
      */
     public function getPaidAmountAttribute(): float
     {
-        return $this->allocations()
-            ->whereHas('payment', function ($query) {
-                $query->where('status', 'completed');
-            })
+        $paidViaAllocations = $this->allocations()
+            ->whereHas('payment', fn ($q) => $q->where('status', 'completed'))
             ->sum('allocated_amount');
+
+        $allocatedPaymentIds = $this->allocations()->pluck('payment_id')->filter()->toArray();
+        $paidDirectly = $this->directPayments()
+            ->whereNotIn('id', $allocatedPaymentIds)
+            ->sum('amount');
+
+        return $paidViaAllocations + $paidDirectly;
     }
 
     /**
-     * Get remaining balance
-     * 
-     * @return float
+     * Get remaining balance, accounting for payments AND applied credit notes.
      */
     public function getBalanceAttribute(): float
     {
-        return max(0, $this->total_amount - $this->paid_amount);
+        // Via allocations
+        $paidViaAllocations = $this->allocations()
+            ->whereHas('payment', fn ($q) => $q->where('status', 'completed'))
+            ->sum('allocated_amount');
+
+        // Via direct payments.billing_id (avoid double-counting)
+        $allocatedPaymentIds = $this->allocations()->pluck('payment_id')->filter()->toArray();
+        $paidDirectly = $this->directPayments()
+            ->whereNotIn('id', $allocatedPaymentIds)
+            ->sum('amount');
+
+        // Applied credit notes
+        $credited = $this->creditNotes()->where('status', 'applied')->sum('amount');
+
+        return max(0, $this->total_amount - $paidViaAllocations - $paidDirectly - $credited);
+    }
+
+    public function getOutstandingBalance(): float
+    {
+        return $this->account->billings()
+            ->whereIn('status', ['pending', 'overdue', 'partially_paid'])
+            ->with(['allocations.payment', 'creditNotes'])
+            ->get()
+            ->sum(fn ($b) => $b->balance); // uses the fixed accessor above
     }
 
     /**
@@ -219,6 +259,23 @@ class Billing extends Model implements Auditable
     public function getTotalConsumptionAttribute(): float
     {
         return $this->details->sum('units');
+    }
+
+    public function getLateFeeAttribute(): float
+    {
+        if (!$this->isOverdue()) {
+            return 0;
+        }
+
+        // Calculate late fee based on number of days overdue
+        $daysOverdue = $this->getDaysOverdue();
+        $lateFee = 0;
+
+        if ($daysOverdue > 30) {
+            $lateFee = 50; // Fixed late fee for overdue bills
+        }
+
+        return $lateFee;
     }
 
     /* =========================
@@ -273,7 +330,7 @@ class Billing extends Model implements Auditable
 
     /**
      * Recalculate total from billing details
-     * 
+     *
      * @return void
      */
     public function recalculateTotal(): void
@@ -283,16 +340,9 @@ class Billing extends Model implements Auditable
         ]);
     }
 
-    public function getOutstandingBalance(): float
-    {
-        return $this->account->billings()
-            ->whereIn('status', ['pending', 'overdue', 'partially_paid'])
-            ->sum(DB::raw('total_amount - paid_amount'));
-    }
-
     /**
      * Get days until due (negative if overdue)
-     * 
+     *
      * @return int
      */
     public function getDaysUntilDue(): int
@@ -302,7 +352,7 @@ class Billing extends Model implements Auditable
 
     /**
      * Get days overdue (0 if not overdue)
-     * 
+     *
      * @return int
      */
     public function getDaysOverdue(): int
@@ -315,7 +365,7 @@ class Billing extends Model implements Auditable
 
     /**
      * Get formatted billing period
-     * 
+     *
      * @return string
      */
     public function getFormattedPeriod(): string
@@ -325,7 +375,7 @@ class Billing extends Model implements Auditable
 
     /**
      * Get bill summary
-     * 
+     *
      * @return array
      */
     public function getSummary(): array

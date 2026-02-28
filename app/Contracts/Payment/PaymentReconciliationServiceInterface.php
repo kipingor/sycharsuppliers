@@ -6,9 +6,9 @@ use App\Models\Payment;
 use App\Models\Billing;
 use App\Models\Account;
 use Illuminate\Support\Collection;
-use App\DTO\PaymentAllocation;
-use App\DTO\ReconciliationResult;
-use App\DTO\CarryForwardBalance;
+use App\DTOs\PaymentAllocation;
+use App\DTOs\ReconciliationResult;
+use App\DTOs\CarryForwardBalance;
 
 interface PaymentReconciliationServiceInterface
 {

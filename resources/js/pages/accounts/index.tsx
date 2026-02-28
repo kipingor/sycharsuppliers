@@ -122,15 +122,15 @@ export default function AccountsIndex() {
                 ) : (
                     <>
                         <Table>
-                            <TableHead>
+                            <TableHeader>
                                 <TableRow>
                                     {['Account #', 'Name', 'Contact', 'Meters', 'Bills', 'Payments', 'Status', 'Actions'].map((header) => (
-                                        <TableCell key={header} className="font-medium">
+                                        <TableHead key={header} className="font-medium">
                                             {header}
-                                        </TableCell>
+                                        </TableHead>
                                     ))}
                                 </TableRow>
-                            </TableHead>
+                            </TableHeader>
                             <TableBody>
                                 {accounts.data.map((account) => (
                                     <TableRow key={account.id}>
@@ -165,12 +165,29 @@ export default function AccountsIndex() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-1">
                                                 <Link href={route('accounts.show', account.id)}>
                                                     <Button variant="ghost" size="sm">
                                                         <Eye size={16} />
                                                     </Button>
                                                 </Link>
+                                                <Link href={route('accounts.edit', account.id)}>
+                                                    <Button variant="ghost" size="sm">
+                                                        <Pencil size={16} />
+                                                    </Button>
+                                                </Link>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-destructive hover:text-destructive"
+                                                    onClick={() => {
+                                                        if (confirm(`Delete account "${account.name}"?`)) {
+                                                            router.delete(route('accounts.destroy', account.id), { preserveScroll: true });
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash size={16} />
+                                                </Button>
                                             </div>
                                         </TableCell>
                                     </TableRow>

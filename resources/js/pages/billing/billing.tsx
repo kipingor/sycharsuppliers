@@ -1,5 +1,5 @@
 import Pagination from '@/components/pagination';
-import { Table, TableBody, TableCell, TableHead, TableRow } from '@/components/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -135,15 +135,15 @@ export default function Bills() {
                 ) : (
                     <>
                         <Table>
-                            <TableHead>
+                            <TableHeader>
                                 <TableRow>
                                     {['ID', 'Account', 'Period', 'Amount', 'Status', 'Actions'].map((header) => (
-                                        <TableCell key={header} className="text-left font-medium">
+                                        <TableHead key={header} className="text-left font-medium">
                                             {header}
-                                        </TableCell>
+                                        </TableHead>
                                     ))}
                                 </TableRow>
-                            </TableHead>
+                            </TableHeader>
                             <TableBody>
                                 {bills.data.map((bill) => (
                                     <TableRow key={bill.id}>

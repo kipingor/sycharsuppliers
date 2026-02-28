@@ -14,6 +14,7 @@ use App\Services\Billing\RebillingService;
 use App\Services\Billing\StatementGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -166,6 +167,8 @@ class BillingController extends Controller
             'account',
             'details.meter',
             'allocations.payment',
+            'creditNotes.createdBy',
+            'creditNotes.previousAccount',
             'audits' => function ($query) {
                 $query->latest()->limit(20);
             }
@@ -222,7 +225,33 @@ class BillingController extends Controller
                     ];
                 }),
 
-                // Computed properties
+                'credit_notes' => $billing->creditNotes->map(function ($note) {
+                    return [
+                        'id' => $note->id,
+                        'reference' => $note->reference,
+                        'type' => $note->type,
+                        'amount' => $note->amount,
+                        'reason' => $note->reason,
+                        'status' => $note->status,
+                        'void_reason' => $note->void_reason,
+                        'voided_at' => $note->voided_at,
+                        'created_by' => $note->createdBy ? [
+                            'id' => $note->createdBy->id,
+                            'name' => $note->createdBy->name,
+                            'email' => $note->createdBy->email,
+                        ] : null,
+                        'previous_account' => $note->previousAccount ? [
+                            'id' => $note->previousAccount->id,
+                            'name' => $note->previousAccount->name,
+                            'account_number' => $note->previousAccount->account_number,
+                        ] : null,
+                    ];
+                }),
+
+                // Computed properties — exposed directly for frontend convenience
+                'paid_amount' => $billing->paid_amount,
+                'balance' => $billing->balance,
+                'notes' => $billing->notes ?? null,
                 'summary' => $billing->getSummary(),
                 'can_be_modified' => $billing->canBeModified(),
                 'is_overdue' => $billing->isOverdue(),
@@ -374,12 +403,12 @@ class BillingController extends Controller
     /**
      * Download bill statement
      */
-    public function downloadStatement(Billing $billing)
+    public function downloadStatement(Billing $billing): HttpResponse|RedirectResponse
     {
         $this->authorize('view', $billing);
 
         try {
-            return $this->statementGenerator->generateBillStatement($billing);
+            return $this->statementGenerator->generateBillStatement($billing)->download("bill_statement_{$billing->id}.pdf");
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to generate statement: ' . $e->getMessage());
         }

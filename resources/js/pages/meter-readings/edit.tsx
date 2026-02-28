@@ -43,6 +43,7 @@ const readingTypes = [
     { value: 'actual', label: 'Actual Reading' },
     { value: 'estimated', label: 'Estimated Reading' },
     { value: 'correction', label: 'Correction' },
+    { value: 'calculated', label: 'Calculated (Sub-meter)' },
 ];
 
 export default function EditMeterReading() {

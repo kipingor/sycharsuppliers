@@ -7,9 +7,9 @@ use Illuminate\Validation\Rule;
 
 /**
  * Store Payment Request
- * 
+ *
  * Validates payment creation with comprehensive rules.
- * 
+ *
  * @package App\Http\Requests
  */
 class StorePaymentRequest extends FormRequest
@@ -124,7 +124,7 @@ class StorePaymentRequest extends FormRequest
                 $account = \App\Models\Account::find($this->account_id);
                 
                 if ($account && $account->getCurrentBalance() <= 0) {
-                    $validator->warnings()->add(
+                    $validator->errors()->add(
                         'account_id',
                         'This account has no outstanding balance. Payment will create a credit.'
                     );

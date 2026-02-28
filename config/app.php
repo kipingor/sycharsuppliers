@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'Sychar Suppliers'),
 
     /*
     |--------------------------------------------------------------------------
@@ -122,5 +122,12 @@ return [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
+
+    'company_tax_pin' => env('COMPANY_TAX_PIN', null),
+    'company_name' => env('COMPANY_NAME', env('APP_NAME', 'Sychar Suppliers')),
+    'company_logo' => env('COMPANY_LOGO', null),
+    'company_address' => env('COMPANY_ADDRESS', null),
+    'company_phone' => env('COMPANY_PHONE', null),
+    'company_email' => env('COMPANY_EMAIL', null),
 
 ];
