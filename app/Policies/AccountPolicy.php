@@ -15,6 +15,15 @@ class AccountPolicy
     }
 
     /**
+     * Determine whether the user can view any billings.
+     */
+    public function viewAny(User $user): bool
+    {
+        return $user->hasRole('admin') || $user->hasRole('manager');
+    }
+
+
+    /**
      * Determine whether the user can create billings.
      */
     public function create(User $user): bool
