@@ -40,7 +40,36 @@ class AccountStatementGenerator
             ->get()
             ->groupBy('payment_id');  // keyed by payment_id for quick lookup
 
-        // ── 4. Build transaction ledger ───────────────────────────────────
+        // ── 4. Opening balance ────────────────────────────────────────────
+        // Must be calculated BEFORE the running-balance loop so the ledger
+        // starts from the correct carried-forward position.
+        //
+        // Formula: prior billed (non-voided) - prior paid - prior credits
+        // NOTE: result is intentionally allowed to be negative — a negative
+        // opening balance means the account was in credit before this period
+        // (i.e. they had overpaid). Clamping to 0 with max() would silently
+        // discard that credit and was the previous bug.
+        $priorBilled = (float) Billing::where('account_id', $account->id)
+            ->where('issued_at', '<', $startDate)
+            ->whereNotIn('status', ['voided'])
+            ->sum('total_amount');
+
+        $priorPaid = (float) Payment::where('account_id', $account->id)
+            ->where('payment_date', '<', $startDate)
+            ->whereNull('deleted_at')
+            ->sum('amount');
+
+        $priorCredited = (float) Billing::with('creditNotes')
+            ->where('account_id', $account->id)
+            ->where('issued_at', '<', $startDate)
+            ->whereNotIn('status', ['voided'])
+            ->get()
+            ->sum(fn ($b) => $b->creditNotes->where('status', 'applied')->sum('amount'));
+
+        // Negative = account was in credit; positive = amount owed from before period
+        $openingBalance = round($priorBilled - $priorPaid - $priorCredited, 2);
+
+        // ── 5. Build transaction ledger ───────────────────────────────────
         $transactions = collect();
 
         // Debit rows — one per bill
@@ -86,45 +115,29 @@ class AccountStatementGenerator
             ]);
         }
 
-        // Sort chronologically, compute running balance
-        $runningBalance = 0;
+        // Sort chronologically, compute running balance.
+        // Seed with openingBalance so every row reflects the true account
+        // position — not just the movement within this period.
+        $runningBalance = $openingBalance;
         $transactions = $transactions
             ->sortBy('sort_date')
             ->values()
             ->map(function ($t) use (&$runningBalance) {
                 $runningBalance += ($t['debit'] ?? 0) - ($t['credit'] ?? 0);
-                $t['running_balance'] = $runningBalance;
+                $t['running_balance'] = round($runningBalance, 2);
                 return $t;
             });
 
-        // ── 5. Totals ─────────────────────────────────────────────────────
+        // ── 6. Totals ─────────────────────────────────────────────────────
         $totalBilled   = (float) $billings->sum('total_amount');
         $totalPaid     = (float) $payments->sum('amount');
         $totalCredited = (float) $billings->sum(
             fn ($b) => $b->creditNotes->where('status', 'applied')->sum('amount')
         );
-        $closingBalance = max(0, $totalBilled - $totalPaid - $totalCredited);
 
-        // ── 6. Opening balance ────────────────────────────────────────────
-        // Unpaid charges from before the period minus payments before the period
-        $priorBilled = (float) Billing::where('account_id', $account->id)
-            ->where('issued_at', '<', $startDate)
-            ->whereNotIn('status', ['voided'])
-            ->sum('total_amount');
-
-        $priorPaid = (float) Payment::where('account_id', $account->id)
-            ->where('payment_date', '<', $startDate)
-            ->whereNull('deleted_at')
-            ->sum('amount');
-
-        $priorCredited = (float) Billing::with('creditNotes')
-            ->where('account_id', $account->id)
-            ->where('issued_at', '<', $startDate)
-            ->whereNotIn('status', ['voided'])
-            ->get()
-            ->sum(fn ($b) => $b->creditNotes->where('status', 'applied')->sum('amount'));
-
-        $openingBalance = max(0, $priorBilled - $priorPaid - $priorCredited);
+        // Closing balance = opening + current period activity.
+        // Negative closing balance means account is in credit after this period.
+        $closingBalance = round($openingBalance + $totalBilled - $totalPaid - $totalCredited, 2);
 
         return [
             'account' => [

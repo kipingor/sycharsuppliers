@@ -46,14 +46,18 @@ class BalanceResolver
      */
     protected function calculateAccountBalance(Account $account): array
     {
-        // Get all outstanding bills
-        $outstandingBills = $account->billings()
+        // Use the same ledger approach as the account statement:
+        // total billed (non-voided) minus all payments received.
+        // This avoids the previous bug where filtering allocations by
+        // payment.status = 'completed' caused pending-status payments to
+        // be invisible, inflating the outstanding balance.
+        $allOutstandingBills = $account->billings()
             ->whereIn('status', ['pending', 'partially_paid', 'overdue'])
             ->get();
 
-        $totalBilled = $outstandingBills->sum('total_amount');
-        $totalPaid = $outstandingBills->sum('paid_amount');
-        $outstandingBalance = $totalBilled - $totalPaid;
+        // Outstanding balance = sum of amount_due on open bills
+        // (amount_due is decremented by PaymentReconciliationService on each allocation)
+        $outstandingBalance = $allOutstandingBills->sum('amount_due');
 
         // Get carry-forward credits
         $credits = $account->carryForwardBalances()
@@ -70,27 +74,35 @@ class BalanceResolver
         // Calculate net balance
         $netBalance = $outstandingBalance + $debits - $credits;
 
+        // For reporting: also compute total_billed and total_paid via ledger
+        $totalBilled = $account->billings()
+            ->whereNotIn('status', ['voided'])
+            ->sum('total_amount');
+
+        $totalPaid = $account->payments()
+            ->whereNull('deleted_at')
+            ->sum('amount');
+
         // Get overdue information
-        $overdueBills = $outstandingBills->filter(fn($bill) => $bill->isOverdue());
-        $overdueAmount = $overdueBills->sum(fn($bill) => $bill->balance);
+        $overdueBills = $allOutstandingBills->filter(fn($bill) => $bill->isOverdue());
+        $overdueAmount = $overdueBills->sum('amount_due');
 
         // Get oldest unpaid bill
-        $oldestBill = $outstandingBills
-            ->where('status', '!=', 'paid')
+        $oldestBill = $allOutstandingBills
             ->sortBy('due_date')
             ->first();
 
         return [
             'account_id' => $account->id,
-            'total_billed' => round($totalBilled, 2),
-            'total_paid' => round($totalPaid, 2),
-            'outstanding_balance' => round($outstandingBalance, 2),
+            'total_billed' => round((float) $totalBilled, 2),
+            'total_paid' => round((float) $totalPaid, 2),
+            'outstanding_balance' => round((float) $outstandingBalance, 2),
             'carry_forward_credits' => round($credits, 2),
             'carry_forward_debits' => round($debits, 2),
             'net_balance' => round($netBalance, 2),
-            'overdue_amount' => round($overdueAmount, 2),
+            'overdue_amount' => round((float) $overdueAmount, 2),
             'overdue_bill_count' => $overdueBills->count(),
-            'outstanding_bill_count' => $outstandingBills->count(),
+            'outstanding_bill_count' => $allOutstandingBills->count(),
             'oldest_bill_date' => $oldestBill?->due_date?->format('Y-m-d'),
             'oldest_bill_days_overdue' => $oldestBill?->getDaysOverdue() ?? 0,
             'has_outstanding_balance' => $netBalance > 0,

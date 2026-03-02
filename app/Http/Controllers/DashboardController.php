@@ -30,6 +30,10 @@ class DashboardController extends Controller
             'accountSummary' => $this->getAccountSummary(),
             'can' => [
                 'downloadReadingList' => $request->user()->can('export', MeterReading::class),
+                'viewReports' => $request->user()->can('viewAny', Billing::class) || $request->user()->can('viewAny', Payment::class),
+                'createBills' => $request->user()->can('create', Billing::class),
+                'createPayments' => $request->user()->can('create', Payment::class),
+                'viewAccounts' => $request->user()->can('viewAny', Account::class),
             ],
         ]);
     }

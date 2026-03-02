@@ -26,7 +26,8 @@ class PaymentReconciliationService
 {
     public function __construct(
         protected AuditService $auditService
-    ) {}
+    ) {
+    }
 
     /**
      * Reconcile a payment to outstanding bills
@@ -147,7 +148,7 @@ class PaymentReconciliationService
 
         // Get outstanding bills for this account, oldest first
         $bills = Billing::where('account_id', $payment->account_id)
-            ->where('status', '!=', 'paid')
+            ->whereNotIn('status', ['paid','voided'])
             ->where('amount_due', '>', 0)
             ->orderBy('due_date')
             ->orderBy('id')
