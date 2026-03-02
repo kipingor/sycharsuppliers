@@ -5,7 +5,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import type { SharedData } from '@/types';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, DollarSign, FileChartColumnIncreasing, Folder, Gauge, LayoutGrid, Receipt, ScanBarcode, Users, Wallet, PlusCircle } from 'lucide-react';
+import { FileChartColumnIncreasing, Gauge, LayoutGrid, PlusCircle, Receipt, ScanBarcode, Users, Wallet } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const footerNavItems: NavItem[] = [
@@ -102,11 +102,13 @@ export function AppSidebar() {
     // }
 
     // Add Reports (typically available to all authenticated users)
-    mainNavItems.push({
-        title: 'Reports',
-        url: route('reports.index'),
-        icon: FileChartColumnIncreasing,
-    });
+    if (auth.can?.billing?.viewAny) {
+        mainNavItems.push({
+            title: 'Reports',
+            url: route('reports.index'),
+            icon: FileChartColumnIncreasing,
+        });
+    }
 
     return (
         <Sidebar collapsible="icon" variant="inset">

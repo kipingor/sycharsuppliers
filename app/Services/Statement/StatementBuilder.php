@@ -73,28 +73,49 @@ class StatementBuilder
 
     /**
      * Calculate balance before the statement period.
+     *
+     * Uses issued_at for bills (not created_at — bills can be bulk-created
+     * in migrations at a time unrelated to when they were issued).
+     * Uses payment_date for payments (not created_at).
+     * Excludes voided bills and soft-deleted payments.
+     * Accounts for applied credit notes.
+     * Returns a signed value: negative = account is in credit (overpaid).
      */
     protected function calculateOpeningBalance(Account $account, Carbon $before): float
     {
         $billed = Billing::where('account_id', $account->id)
-            ->where('created_at', '<', $before)
+            ->where('issued_at', '<', $before)
+            ->whereNotIn('status', ['voided'])
             ->sum('total_amount');
 
         $paid = Payment::where('account_id', $account->id)
-            ->where('created_at', '<', $before)
+            ->where('payment_date', '<', $before)
+            ->whereNull('deleted_at')
             ->sum('amount');
 
-        return round($billed - $paid, 2);
+        // Applied credit notes on bills issued before the period
+        $credited = Billing::with('creditNotes')
+            ->where('account_id', $account->id)
+            ->where('issued_at', '<', $before)
+            ->whereNotIn('status', ['voided'])
+            ->get()
+            ->sum(fn ($b) => $b->creditNotes->where('status', 'applied')->sum('amount'));
+
+        return round($billed - $paid - $credited, 2);
     }
 
     /**
      * Build bill ledger lines.
+     *
+     * Filters by issued_at so bills land in the period they were actually
+     * issued to the customer. Excludes voided bills.
      */
     protected function billLines(Account $account, Carbon $from, Carbon $to): Collection
     {
         return Billing::with('details.meter')
             ->where('account_id', $account->id)
-            ->whereBetween('created_at', [$from, $to])
+            ->whereBetween('issued_at', [$from, $to])
+            ->whereNotIn('status', ['voided'])
             ->get()
             ->map(function (Billing $billing) {
 
@@ -107,7 +128,7 @@ class StatementBuilder
                 })->implode('; ');
 
                 return [
-                    'date'        => $billing->created_at,
+                    'date'        => $billing->issued_at,
                     'reference'   => 'BILL-' . $billing->id,
                     'description' => 'Water usage (' . $meterSummary . ')',
                     'debit'       => (float) $billing->total_amount,
@@ -118,15 +139,19 @@ class StatementBuilder
 
     /**
      * Build payment ledger lines.
+     *
+     * Filters by payment_date (not created_at) and excludes soft-deleted
+     * payments so the ledger reflects when money was actually received.
      */
     protected function paymentLines(Account $account, Carbon $from, Carbon $to): Collection
     {
         return Payment::where('account_id', $account->id)
-            ->whereBetween('created_at', [$from, $to])
+            ->whereBetween('payment_date', [$from, $to])
+            ->whereNull('deleted_at')
             ->get()
             ->map(function (Payment $payment) {
                 return [
-                    'date'        => $payment->created_at,
+                    'date'        => $payment->payment_date,
                     'reference'   => 'PAY-' . $payment->id,
                     'description' => 'Payment received',
                     'debit'       => null,

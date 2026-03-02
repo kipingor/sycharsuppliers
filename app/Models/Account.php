@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\CreditNote;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,10 +11,10 @@ use OwenIt\Auditing\Contracts\Auditable;
 
 /**
  * Account Model
- * 
+ *
  * Represents a billing account. An account can have multiple meters,
  * bills, and payments. This is the central entity for billing operations.
- * 
+ *
  * @property int $id
  * @property string $account_number
  * @property string $name
@@ -26,7 +27,7 @@ use OwenIt\Auditing\Contracts\Auditable;
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  * @property \Carbon\Carbon|null $deleted_at
- * 
+ *
  * @property-read \Illuminate\Database\Eloquent\Collection|Meter[] $meters
  * @property-read \Illuminate\Database\Eloquent\Collection|Billing[] $billings
  * @property-read \Illuminate\Database\Eloquent\Collection|Payment[] $payments
@@ -153,35 +154,52 @@ class Account extends Model implements Auditable
      |========================= */
 
     /**
-     * Get current balance for this account
-     * 
+     * Get current balance for this account.
+     *
+     * Uses a simple ledger approach (total billed minus total paid) that is
+     * consistent with the account statement — so the figure shown on the
+     * account page and on printed statements always agree.
+     *
+     * Previous implementation was broken in two ways:
+     *  1. It filtered payments by status = 'completed', so pending-status
+     *     payments were invisible and the balance was overstated.
+     *  2. It summed total_amount rather than amount_due for outstanding bills,
+     *     double-counting amounts already covered by partial payments.
+     *
      * @return float Total outstanding balance
      */
     public function getCurrentBalance(): float
     {
-        // Total due from unpaid/partially paid bills
-        $totalDue = $this->billings()
-            ->whereIn('status', ['pending', 'partially_paid'])
+        // All billed charges (voided bills are excluded — they were cancelled)
+        $totalBilled = $this->billings()
+            ->whereNotIn('status', ['voided'])
             ->sum('total_amount');
 
-        // Total paid (from allocations)
-        $totalPaid = PaymentAllocation::whereHas('payment', function ($query) {
-            $query->where('account_id', $this->id)
-                ->where('status', 'completed');
-        })->sum('allocated_amount');
+        // All payments received (no status filter — every ksh recorded counts)
+        $totalPaid = $this->payments()
+            ->whereNull('deleted_at')
+            ->sum('amount');
 
-        // Subtract any active credits
-        $credits = $this->carryForwardBalances()
+        // Applied credit notes
+        $credited = CreditNote::whereHas(
+            'billing',
+            fn ($q) => $q->where('account_id', $this->id)
+        )
+            ->where('status', 'applied')
+            ->sum('amount');
+
+        // Active carry-forward credits (overpayments carried to next period)
+        $carryForwardCredits = $this->carryForwardBalances()
             ->where('type', 'credit')
             ->where('status', 'active')
             ->sum('balance');
 
-        return max(0, $totalDue - $totalPaid - $credits);
+        return max(0, $totalBilled - $totalPaid - $credited - $carryForwardCredits);
     }
 
     /**
      * Get total amount due (before payments)
-     * 
+     *
      * @return float Total amount from all outstanding bills
      */
     public function getTotalDue(): float
@@ -193,7 +211,7 @@ class Account extends Model implements Auditable
 
     /**
      * Get total amount paid
-     * 
+     *
      * @return float Total of all completed payments
      */
     public function getTotalPaid(): float
@@ -205,7 +223,7 @@ class Account extends Model implements Auditable
 
     /**
      * Get active carry-forward credit balance
-     * 
+     *
      * @return float Total active credit balance
      */
     public function getActiveCreditBalance(): float
@@ -218,7 +236,7 @@ class Account extends Model implements Auditable
 
     /**
      * Get outstanding bills for this account
-     * 
+     *
      * @return \Illuminate\Database\Eloquent\Collection
      */
     public function getOutstandingBills()
@@ -239,7 +257,7 @@ class Account extends Model implements Auditable
 
     /**
      * Check if account is active
-     * 
+     *
      * @return bool
      */
     public function isActive(): bool
@@ -249,7 +267,7 @@ class Account extends Model implements Auditable
 
     /**
      * Check if account is suspended
-     * 
+     *
      * @return bool
      */
     public function isSuspended(): bool
@@ -259,7 +277,7 @@ class Account extends Model implements Auditable
 
     /**
      * Check if account has overdue bills
-     * 
+     *
      * @return bool
      */
     public function hasOverdueBills(): bool
@@ -272,7 +290,7 @@ class Account extends Model implements Auditable
 
     /**
      * Suspend the account
-     * 
+     *
      * @param string|null $reason
      * @return bool
      */
@@ -286,7 +304,7 @@ class Account extends Model implements Auditable
 
     /**
      * Activate/reactivate the account
-     * 
+     *
      * @return bool
      */
     public function activate(): bool
@@ -300,7 +318,7 @@ class Account extends Model implements Auditable
 
     /**
      * Get account summary for dashboard/reports
-     * 
+     *
      * @return array
      */
     public function getSummary(): array

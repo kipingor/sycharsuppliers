@@ -96,7 +96,7 @@ class PaymentController extends Controller
         return Inertia::render('payments/create', [
             'accounts' => Account::active()
                 ->with(['billings' => function ($q) {
-                    $q->where('status', '!=', 'paid');
+                    $q->whereNotIn('status', ['paid','voided']);
                 }])
                 ->get()
                 ->map(fn ($acc) => [
