@@ -2,22 +2,51 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
-import { BarChart3, FileText, ArrowRight } from 'lucide-react';
+import { BarChart3, FileText, TrendingDown, TrendingUp, Users, Clock, ArrowRight } from 'lucide-react';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Reports', href: '#' },
-];
+const breadcrumbs: BreadcrumbItem[] = [{ title: 'Reports', href: '#' }];
 
 const REPORTS = [
     {
-        title:       'Tax Report',
+        title: 'Tax Report',
         description: 'Monthly revenue breakdown, cash collected, and outstanding receivables for income tax filing.',
-        href:        'reports.tax',
-        icon:        FileText,
-        color:       'text-blue-600',
-        bg:          'bg-blue-50 dark:bg-blue-950/30',
+        href: 'reports.tax',
+        icon: FileText,
+        color: 'text-blue-600',
+        bg: 'bg-blue-50 dark:bg-blue-950/30',
     },
-    // Add more report types here as your app grows
+    {
+        title: 'Expense Report',
+        description: 'Operating expenses by category and period, with approved vs pending breakdown.',
+        href: 'reports.expenses',
+        icon: TrendingDown,
+        color: 'text-orange-600',
+        bg: 'bg-orange-50 dark:bg-orange-950/30',
+    },
+    {
+        title: 'Revenue vs Expenses (P&L)',
+        description: 'Profit and loss view comparing revenue billed against approved operational costs.',
+        href: 'reports.pl',
+        icon: TrendingUp,
+        color: 'text-green-600',
+        bg: 'bg-green-50 dark:bg-green-950/30',
+    },
+    {
+        title: 'Accounts Receivable Aging',
+        description: 'Outstanding bills bucketed by overdue age: current, 1–30, 31–60, 61–90, and 90+ days.',
+        href: 'reports.aging',
+        icon: Clock,
+        color: 'text-red-600',
+        bg: 'bg-red-50 dark:bg-red-950/30',
+    },
+    {
+        title: 'Debtors Report',
+        description: 'All accounts with outstanding balances, with contact details for follow-up.',
+        href: 'reports.debtors',
+        icon: Users,
+        color: 'text-purple-600',
+        bg: 'bg-purple-50 dark:bg-purple-950/30',
+    },
 ];
 
 export default function ReportsIndex() {
@@ -29,9 +58,8 @@ export default function ReportsIndex() {
                     <BarChart3 size={22} className="text-blue-600" />
                     <h1 className="text-2xl font-bold">Reports</h1>
                 </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {REPORTS.map(r => (
+                    {REPORTS.map((r) => (
                         <Link key={r.title} href={route(r.href)}>
                             <Card className="hover:shadow-md transition-shadow cursor-pointer group h-full">
                                 <CardContent className="pt-5 pb-5 flex flex-col gap-3 h-full">
