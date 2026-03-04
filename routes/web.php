@@ -3,12 +3,8 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ReportsController;
-use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AccountStatementController;
-use App\Http\Controllers\StatementController;
-use App\Http\Requests\StoreBillingRequest;
-use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -32,12 +28,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('residents', ResidentController::class);
     Route::resource('expenses', \App\Http\Controllers\ExpenseController::class);
+    Route::post('expenses/{expense}/approve', [\App\Http\Controllers\ExpenseController::class, 'approve'])->name('expenses.approve');
+    Route::post('expenses/{expense}/reject', [\App\Http\Controllers\ExpenseController::class, 'reject'])->name('expenses.reject');
+    Route::get('expense-budgets', [\App\Http\Controllers\ExpenseController::class, 'budgets'])->name('expenses.budgets');
+    Route::post('expense-budgets', [\App\Http\Controllers\ExpenseController::class, 'storeBudget'])->name('expenses.budgets.store');
+    Route::delete('expense-budgets/{budget}', [\App\Http\Controllers\ExpenseController::class, 'destroyBudget'])->name('expenses.budgets.destroy');
+
     Route::resource('employees', \App\Http\Controllers\EmployeeController::class);
 
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('/', [ReportsController::class, 'index'])->name('index');
         Route::get('/tax', [ReportsController::class, 'taxReport'])->name('tax');
         Route::get('/tax/download', [ReportsController::class, 'downloadTaxReport'])->name('tax.download');
+        Route::get('/expenses', [ReportsController::class, 'expenseReport'])->name('expenses');
+        Route::get('/pl', [ReportsController::class, 'plReport'])->name('pl');
+        Route::get('/aging', [ReportsController::class, 'agingReport'])->name('aging');
+        Route::get('/debtors', [ReportsController::class, 'debtorsReport'])->name('debtors');
     });
 });
 

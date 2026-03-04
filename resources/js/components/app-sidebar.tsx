@@ -5,7 +5,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import type { SharedData } from '@/types';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { FileChartColumnIncreasing, Gauge, LayoutGrid, PlusCircle, Receipt, ScanBarcode, Users, Wallet } from 'lucide-react';
+import { FileChartColumnIncreasing, Gauge, LayoutGrid, PlusCircle, Receipt, ScanBarcode, Users, Wallet, DollarSign } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const footerNavItems: NavItem[] = [
@@ -93,13 +93,13 @@ export function AppSidebar() {
     }
 
     // Add Expenses if user can view
-    // if (auth.can?.expense?.viewAny) {
-    //     mainNavItems.push({
-    //         title: 'Expenses',
-    //         url: route('expenses.index'),
-    //         icon: DollarSign,
-    //     });
-    // }
+    if (auth.can?.expense?.viewAny) {
+        mainNavItems.push({
+            title: 'Expenses',
+            url: route('expenses.index'),
+            icon: DollarSign,
+        });
+    }
 
     // Add Reports (typically available to all authenticated users)
     if (auth.can?.billing?.viewAny) {
