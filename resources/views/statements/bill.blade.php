@@ -705,8 +705,10 @@
                     <td style="vertical-align:bottom;">
                         <div class="footer-company">
                             {{ $company['name'] }}<br>
-                            This is a computer-generated statement.<br>
-                            No signature required.
+                            ALL CHEQUES PAYABLE TO {{ $company['name'] }}<br>
+                            Direct deposit to {{ $company['bank']['name'] }}<br>
+                            ACCOUNT NUMBER: {{ $company['bank']['account_number'] }} {{ $company['bank']['branch'] }}<br>
+                            PayBill No: {{ $company['bank']['paybill_number'] }} Account: {{ $company['bank']['account_number'] }}
                         </div>
                     </td>
                 </tr>

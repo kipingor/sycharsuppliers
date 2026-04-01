@@ -263,4 +263,11 @@ return [
         'generate_submeter_bills' => true,
     ],
 
+    'company' => [
+        'bank_name' => env('BILLING_COMPANY_BANK_NAME', 'NCBA Bank'),
+        'bank_account_number' => env('BILLING_COMPANY_BANK_ACCOUNT_NUMBER', '1001821276'),
+        'bank_branch' => env('BILLING_COMPANY_BANK_BRANCH', 'Galleria Branch'),
+        'paybill_number' => env('BILLING_COMPANY_PAYBILL_NUMBER', '880100'),
+    ],
+
 ];
