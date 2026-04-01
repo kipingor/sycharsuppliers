@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Foundation\Inspiring;
 use App\Models\Billing;
+use App\Models\EmailLog;
 use App\Models\Employee;
 use App\Models\Expense;
 use App\Models\Meter;
@@ -80,6 +81,10 @@ class HandleInertiaRequests extends Middleware
                     ],
                     'report' => [
                         'viewAny' => $request->user()->can('viewAny', Report::class),
+                    ],
+                    'emailLog' => [
+                        'viewAny' => $request->user()?->can('viewAny', EmailLog::class) ?? false,
+                        'create'  => $request->user()?->can('create',  EmailLog::class) ?? false,
                     ],
                 ] : null,
             ],

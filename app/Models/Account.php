@@ -119,6 +119,11 @@ class Account extends Model implements Auditable
         return $this->hasMany(CarryForwardBalance::class);
     }
 
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(\App\Models\EmailLog::class);
+    }
+
     /* =========================
      | Scopes
      |========================= */

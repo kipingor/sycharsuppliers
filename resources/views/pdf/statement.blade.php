@@ -119,6 +119,13 @@
     <p class="muted" style="text-align: center; margin-top: 1rem">
         ALL CHEQUES PAYABLE TO <strong>SYCHAR SUPPLIERS</strong>
     </p>
+    <table style="margin-top: 1rem; width: 100%">
+        <tr>
+            <td style="font-size: 10px" class="muted">Direct deposite to <span style="font-weight: bold">NCBA Bank</span></td>
+            <td style="font-size: 10px" class="muted">ACCOUNT NUMBER: <span style="font-weight: bold">1001821276. GALLERIA BRANCH</span></td>
+            <td style="font-size: 10px" class="muted">PayBill No: <span style="font-weight: bold">880100</span> Account: <span style="font-weight: bold">1001821276</span></td>
+        </tr>
+    </table>
 
 </body>
 </html>

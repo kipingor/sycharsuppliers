@@ -24,6 +24,7 @@ export interface Auth {
         resident?: PermissionSet;
         expense?: PermissionSet;
         employee?: PermissionSet;
+        emailLog?: PermissionSet;
     };
 }
 
