@@ -2,25 +2,99 @@
 
 namespace App\Services;
 
+use App\Mail\GenericEmail;
+use App\Models\Account;
 use App\Models\EmailLog;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\GenericEmail; // Example Mailable class
 
 class EmailService
 {
-    public function sendEmail(string $recipient, string $subject, string $body)
-    {
+    /**
+     * Send an outbound email and record it in email_logs.
+     *
+     * @param  string  $recipient   To: email address
+     * @param  string  $subject
+     * @param  string  $body        HTML body
+     * @param  array   $options     Supported keys:
+     *                                name        string   recipient display name
+     *                                account_id  int      FK to accounts table
+     *                                in_reply_to string   Message-Id for threading
+     */
+    public function send(
+        string $recipient,
+        string $subject,
+        string $body,
+        array  $options = []
+    ): EmailLog {
+        $accountId = $options['account_id']  ?? EmailLog::resolveAccountId($recipient);
+        $inReplyTo = $options['in_reply_to'] ?? null;
+        $name      = $options['name']        ?? null;
+
         $log = EmailLog::create([
+            'direction'       => 'outbound',
+            'from_email'      => config('mail.from.address'),
+            'from_name'       => config('mail.from.name'),
+            'account_id'      => $accountId,
             'recipient_email' => $recipient,
-            'subject' => $subject,
-            'body' => $body,
+            'recipient_name'  => $name,
+            'subject'         => $subject,
+            'body'            => $body,
+            'status'          => EmailLog::STATUS_QUEUED,
+            'in_reply_to'     => $inReplyTo,
         ]);
 
         try {
-            Mail::to($recipient)->send(new GenericEmail($subject, $body));
+            Mail::to($recipient, $name)
+                ->send(new GenericEmail($subject, $body, $inReplyTo));
+
             $log->markAsSent();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $log->markAsFailed($e->getMessage());
         }
+
+        return $log;
+    }
+
+    /**
+     * Send to an account by ID — looks up account->email automatically.
+     * Returns null if the account has no email address on record.
+     */
+    public function sendToAccount(int $accountId, string $subject, string $body, array $options = []): ?EmailLog
+    {
+        $account = Account::find($accountId);
+
+        if (!$account || !$account->email) {
+            return null;
+        }
+
+        return $this->send($account->email, $subject, $body, array_merge([
+            'name'       => $account->name,
+            'account_id' => $accountId,
+        ], $options));
+    }
+
+    /**
+     * Reply to an inbound email (handles Re: subject prefix + threading headers).
+     */
+    public function replyTo(EmailLog $inbound, string $body, array $options = []): EmailLog
+    {
+        $subject = str_starts_with($inbound->subject, 'Re: ')
+            ? $inbound->subject
+            : 'Re: ' . $inbound->subject;
+
+        return $this->send($inbound->from_email, $subject, $body, array_merge([
+            'name'        => $inbound->from_name,
+            'account_id'  => $inbound->account_id,
+            'in_reply_to' => $inbound->message_id,
+        ], $options));
+    }
+
+    /**
+     * Legacy alias — kept for backward compatibility with existing callers.
+     * @deprecated Use send() instead.
+     */
+    public function sendEmail(string $recipient, string $subject, string $body): void
+    {
+        $this->send($recipient, $subject, $body);
     }
 }

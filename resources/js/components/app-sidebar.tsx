@@ -5,7 +5,7 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import type { SharedData } from '@/types';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
-import { FileChartColumnIncreasing, Gauge, LayoutGrid, PlusCircle, Receipt, ScanBarcode, Users, Wallet, DollarSign } from 'lucide-react';
+import { FileChartColumnIncreasing, Gauge, LayoutGrid, Mail, PlusCircle, Receipt, ScanBarcode, Users, Wallet, DollarSign } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const footerNavItems: NavItem[] = [
@@ -98,6 +98,15 @@ export function AppSidebar() {
             title: 'Expenses',
             url: route('expenses.index'),
             icon: DollarSign,
+        });
+    }
+
+    // Add Emails if user can view
+    if (auth.can?.emailLog?.viewAny) {
+        mainNavItems.push({
+            title: 'Emails',
+            url: route('emails.index'),
+            icon: Mail,
         });
     }
 
