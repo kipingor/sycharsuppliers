@@ -35,6 +35,12 @@ class StatementGenerator
             'phone'   => Config::get('app.company_phone', null),
             'email'   => Config::get('app.company_email', null),
             'website' => Config::get('app.company_website', null),
+            'bank'    => [
+                'name' => Config::get('billing.company.bank_name', 'NCBA Bank'),
+                'account_number' => Config::get('billing.company.bank_account_number', '1001821276'),
+                'branch' => Config::get('billing.company.bank_branch', 'Galleria Branch'),
+                'paybill_number' => Config::get('billing.company.paybill_number', '880100'),
+            ],
         ];
 
         // ── Account info ──────────────────────────────────────────────────────
