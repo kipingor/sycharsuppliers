@@ -29,11 +29,11 @@ class DatabaseSeeder extends Seeder
         // Create Antony Kipingor as Admin
 
         $adminUser = User::factory()->create([
-            'name' => 'Antony Kipingor',
-            'email' => 'kipingor@gmail.com',
-            'password' => Hash::make('deadenman80'),
+            'name' => config('app.admin_user_name'),
+            'email' => config('app.admin_user_email'),
+            'password' => Hash::make(config('app.admin_user_password')),
             'profile_image' => fake()->imageUrl(200, 200, 'people'),
-        ]);        
+        ]);
 
         // Define roles
         $admin = Role::firstOrCreate(['name' => 'admin']);
@@ -112,6 +112,6 @@ class DatabaseSeeder extends Seeder
         $employees = User::factory(2)->create()->each(function ($user) use ($field_officer) {
             $user->assignRole($field_officer);
             Employee::factory()->create(['user_id' => $user->id, 'position' => 'Field Officer']);
-        });    
+        });
     }
 }
