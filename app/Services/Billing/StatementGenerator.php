@@ -19,114 +19,7 @@ class StatementGenerator
      */
     public function generateBillStatement(Billing $billing): \Barryvdh\DomPDF\PDF
     {
-        // Eager-load everything the view needs (safe to call even if already loaded)
-        $billing->loadMissing([
-            'account',
-            'details.meter',
-            'allocations.payment',
-            'creditNotes',
-        ]);
-
-        // ── Company info ──────────────────────────────────────────────────────
-        $company = [
-            'name'    => Config::get('app.company_name', config('app.name', 'Sychar Suppliers')),
-            'logo'    => Config::get('app.company_logo', public_path('logo.png')),
-            'address' => Config::get('app.company_address', null),
-            'phone'   => Config::get('app.company_phone', null),
-            'email'   => Config::get('app.company_email', null),
-            'website' => Config::get('app.company_website', null),
-            'bank'    => [
-                'name' => Config::get('billing.company.bank_name', 'NCBA Bank'),
-                'account_number' => Config::get('billing.company.bank_account_number', '1001821276'),
-                'branch' => Config::get('billing.company.bank_branch', 'Galleria Branch'),
-                'paybill_number' => Config::get('billing.company.paybill_number', '880100'),
-            ],
-        ];
-
-        // ── Account info ──────────────────────────────────────────────────────
-        $account = [
-            'number'  => $billing->account?->account_number ?? 'N/A',
-            'name'    => $billing->account?->name ?? 'N/A',
-            'address' => $billing->account?->address ?? null,
-            'phone'   => $billing->account?->phone ?? null,
-            'email'   => $billing->account?->email ?? null,
-        ];
-
-        // ── Billing header info ───────────────────────────────────────────────
-        $isOverdue   = $billing->due_date && Carbon::parse($billing->due_date)->isPast()
-            && ! in_array($billing->status, ['paid', 'voided']);
-        $daysOverdue = $isOverdue
-            ? (int) Carbon::parse($billing->due_date)->diffInDays(now())
-            : 0;
-
-        $billingData = [
-            'id'          => $billing->id,
-            'status'      => ucfirst(str_replace('_', ' ', $billing->status)),
-            'period'      => $billing->billing_period,                          // e.g. "2026-02"
-            'issued_date' => Carbon::parse($billing->issued_at)->format('d M Y'),
-            'due_date'    => Carbon::parse($billing->due_date)->format('d M Y'),
-            'is_overdue'  => $isOverdue,
-            'days_overdue' => $daysOverdue,
-        ];
-
-        // ── Consumption details ───────────────────────────────────────────────
-        $details = ($billing->details ?? collect())->map(fn($d) => [
-            'meter_number'     => $d->meter?->meter_number ?? 'N/A',
-            'meter_name'       => $d->meter?->meter_name   ?? null,
-            'previous_reading' => number_format($d->previous_reading, 2),
-            'current_reading'  => number_format($d->current_reading, 2),
-            'consumption'      => number_format($d->units, 2),
-            'rate'             => number_format($d->rate, 2),
-            'amount'           => number_format($d->amount, 2),
-        ])->toArray();
-
-        // ── Amount summary ────────────────────────────────────────────────────
-        $totalCredited = ($billing->creditNotes ?? collect())
-            ->where('status', 'applied')
-            ->sum('amount');
-
-        $amounts = [
-            'subtotal'     => number_format($billing->total_amount, 2),
-            'late_fee'     => null,
-            'total'        => number_format($billing->total_amount, 2),
-            'credited'     => $totalCredited > 0 ? number_format($totalCredited, 2) : null,
-            'paid'         => number_format($billing->paid_amount ?? 0, 2),
-            'balance'      => number_format($billing->balance ?? $billing->total_amount, 2),
-        ];
-
-        $creditNotes = ($billing->creditNotes ?? collect())
-            ->where('status', 'applied')
-            ->map(fn($cn) => [
-                'reference'        => $cn->reference,
-                'type'             => $cn->typeLabel(),
-                'amount'           => number_format($cn->amount, 2),
-                'reason'           => $cn->reason,
-                'date'             => $cn->created_at->format('d M Y'),
-                'previous_account' => $cn->previousAccount?->name ?? null,
-            ])->values()->toArray();
-
-        // ── Payment history ───────────────────────────────────────────────────
-        $payments = ($billing->allocations ?? collect())->map(fn($a) => [
-            'date'      => $a->payment?->payment_date
-                ? Carbon::parse($a->payment->payment_date)->format('d M Y')
-                : 'N/A',
-            'reference' => $a->payment?->reference ?? 'N/A',
-            'method'    => ucfirst($a->payment?->method ?? 'N/A'),
-            'amount'    => number_format($a->allocated_amount, 2),
-        ])->toArray();
-
-        // ── Build the data array passed to the Blade view ─────────────────────
-        // THIS is what was broken: loadView() requires an array as its 2nd argument.
-        $data = [
-            'billing'      => $billingData,
-            'company'      => $company,
-            'account'      => $account,
-            'details'      => $details,
-            'amounts'      => $amounts,
-            'payments'     => $payments,
-            'credit_notes' => $creditNotes,
-            'generated_at' => Carbon::now(),
-        ];
+        $data = $this->prepareBillStatementData($billing);
 
         return Pdf::loadView('statements.bill', $data)   // ← array, not a string
             ->setPaper('a4', 'portrait')
@@ -189,6 +82,12 @@ class StatementGenerator
             'phone'   => Config::get('app.company_phone', null),
             'email'   => Config::get('app.company_email', null),
             'website' => Config::get('app.company_website', null),
+            'bank'    => [
+                'name' => Config::get('billing.company.bank_name', 'NCBA Bank'),
+                'account_number' => Config::get('billing.company.bank_account_number', '1001821276'),
+                'branch' => Config::get('billing.company.bank_branch', 'Galleria Branch'),
+                'paybill_number' => Config::get('billing.company.paybill_number', '880100'),
+            ],
         ];
 
         // ── Account info ──────────────────────────────────────────────────────
@@ -218,7 +117,7 @@ class StatementGenerator
         ];
 
         // ── Consumption details ───────────────────────────────────────────────
-        $details = ($billing->details ?? collect())->map(fn($d) => [
+        $details = ($billing->details ?? collect())->map(fn ($d) => [
             'meter_number'     => $d->meter?->meter_number ?? 'N/A',
             'meter_name'       => $d->meter?->meter_name   ?? null,
             'previous_reading' => number_format($d->previous_reading, 2),
@@ -244,7 +143,7 @@ class StatementGenerator
 
         $creditNotes = ($billing->creditNotes ?? collect())
             ->where('status', 'applied')
-            ->map(fn($cn) => [
+            ->map(fn ($cn) => [
                 'reference'        => $cn->reference,
                 'type'             => $cn->typeLabel(),
                 'amount'           => number_format($cn->amount, 2),
@@ -254,7 +153,7 @@ class StatementGenerator
             ])->values()->toArray();
 
         // ── Payment history ───────────────────────────────────────────────────
-        $payments = ($billing->allocations ?? collect())->map(fn($a) => [
+        $payments = ($billing->allocations ?? collect())->map(fn ($a) => [
             'date'      => $a->payment?->payment_date
                 ? Carbon::parse($a->payment->payment_date)->format('d M Y')
                 : 'N/A',
