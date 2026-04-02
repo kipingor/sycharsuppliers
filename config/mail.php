@@ -14,7 +14,7 @@ return [
     |
     */
 
-    'default' => env('MAIL_MAILER', 'mailgun'),
+    'default' => env('MAIL_MAILER', 'resend'),
 
     /*
     |--------------------------------------------------------------------------
@@ -63,6 +63,7 @@ return [
 
         'resend' => [
             'transport' => 'resend',
+            'api_key' => env('RESEND_API_KEY'),
         ],
 
         'sendmail' => [
@@ -99,13 +100,6 @@ return [
             'transport' => 'mailersend',
         ],
 
-        'mailgun' => [
-            'transport' => 'mailgun',
-            // 'client' => [
-            //     'timeout' => 5,
-            // ],
-        ],
-
     ],
 
     /*
@@ -120,8 +114,32 @@ return [
     */
 
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'sales@sycharsuppliers.com'),
+        'address' => env('MAIL_FROM_ADDRESS', 'noreply@sycharsuppliers.com'),
         'name' => env('MAIL_FROM_NAME', 'Sychar Suppliers'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Resend Configuration for Bounce & Complaint Handling
+    |--------------------------------------------------------------------------
+    |
+    | For Resend, you need a custom domain configured with a subdomain for
+    | return address (bounce handling). This subdomain is used for SPF,
+    | DMARC alignment, and handling bounced emails.
+    |
+    | Domain: sycharsuppliers.com
+    | Subdomain: send.sycharsuppliers.com (for bounce/reply-to address)
+    |
+    | Configure your DNS records:
+    | - Add SPF record: v=spf1 include:smtp.resend.com ~all
+    | - Add DKIM record: Check Resend dashboard for DKIM records
+    | - Add DMARC record: v=DMARC1; p=quarantine; rua=mailto:dmarc@sycharsuppliers.com
+    |
+    | For bounce handling, configure the return path:
+    | - Return-Path header should point to: bounce@send.sycharsuppliers.com
+    |
+    */
+
+    'bounce_address' => env('RESEND_CUSTOM_MAILER_FROM', 'send@sycharsuppliers.com'),
 
 ];

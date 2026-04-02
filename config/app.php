@@ -130,4 +130,9 @@ return [
     'company_phone' => env('COMPANY_PHONE', null),
     'company_email' => env('COMPANY_EMAIL', null),
 
+    'admin_user_name' => env('ADMIN_USER_NAME', null),
+    'admin_user_email' => env('ADMIN_USER_EMAIL', null),
+    'admin_user_password' => env('ADMIN_USER_PASSWORD', null)
+
+
 ];

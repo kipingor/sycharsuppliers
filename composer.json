@@ -20,6 +20,7 @@
         "maatwebsite/excel": "^3.1",
         "mailersend/laravel-driver": "^2.11",
         "owen-it/laravel-auditing": "^14.0",
+        "resend/resend-laravel": "^1.3",
         "safaricom/mpesa": "^1.0",
         "setasign/fpdf": "^1.8",
         "setasign/fpdi": "^2.6",
@@ -27,7 +28,6 @@
         "spatie/laravel-permission": "^6.16",
         "spatie/laravel-responsecache": "^7.6",
         "symfony/http-client": "^8.0",
-        "symfony/mailgun-mailer": "^8.0",
         "tightenco/ziggy": "^2.4",
         "twilio/sdk": "^8.3"
     },
