@@ -419,7 +419,7 @@
 
                     {{-- Bill title --}}
                     <td class="bill-title-block" style="vertical-align:top;">
-                        <div class="bill-title">Bill Statement</div>
+                        <div class="bill-title">Water Bill</div>
                         <div class="bill-number">Bill #{{ $billing['id'] }}</div>
                         <div class="generated-date">Generated: {{ $generated_at->format('F j, Y  g:i A') }}</div>
                         @php
