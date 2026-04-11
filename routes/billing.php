@@ -67,9 +67,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/{payment}/reconcile', [PaymentController::class, 'reconcile'])->name('reconcile');
         Route::post('/{payment}/reverse', [PaymentController::class, 'reverseReconciliation'])->name('reverse');
         Route::post('/bulk-reconcile', [PaymentController::class, 'bulkReconcile'])->name('bulk-reconcile');
-        Route::get('/payments/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])
+        Route::get('/{payment}/receipt', [PaymentController::class, 'downloadReceipt'])
             ->name('payments.receipt.download');
-        Route::post('/payments/{payment}/receipt/send', [PaymentController::class, 'sendReceipt'])
+        Route::post('/{payment}/receipt/send', [PaymentController::class, 'sendReceipt'])
             ->name('payments.receipt.send');
 
         // Export

@@ -41,7 +41,9 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::table('meters', function (Blueprint $table) {
+        $driver = Schema::getConnection()->getDriverName();
+
+        Schema::table('meters', function (Blueprint $table) use ($driver) {
             // Add account_id (CRITICAL - primary foreign key)
             if (!Schema::hasColumn('meters', 'account_id')) {
                 $table->foreignId('account_id')
@@ -53,10 +55,12 @@ return new class extends Migration {
 
             // Make resident_id nullable (secondary relationship)
             if (Schema::hasColumn('meters', 'resident_id')) {
-                $table->foreignId('resident_id')
-                    ->nullable()
-                    ->change()
-                    ->comment('OPTIONAL - specific resident using this meter');
+                if ($driver !== 'sqlite') {
+                    $table->foreignId('resident_id')
+                        ->nullable()
+                        ->change()
+                        ->comment('OPTIONAL - specific resident using this meter');
+                }
             }
 
             // Add meter_type (individual vs bulk)
@@ -107,11 +111,10 @@ return new class extends Migration {
         //   c) Recreate column with new enum
 
         // For safety, we'll add a comment to the column
-        DB::statement("ALTER TABLE meters MODIFY COLUMN type VARCHAR(50) DEFAULT 'analog' COMMENT 'NEEDS MIGRATION: Change to water|sewer enum'");
-
-        // Add 'faulty' to status enum
-        // Note: Direct enum modification is risky, using string column is safer
-        DB::statement("ALTER TABLE meters MODIFY COLUMN status VARCHAR(50) DEFAULT 'active' COMMENT 'active|inactive|replaced|faulty'");
+        if ($driver === 'mysql') {
+            DB::statement("ALTER TABLE meters MODIFY COLUMN type VARCHAR(50) DEFAULT 'analog' COMMENT 'NEEDS MIGRATION: Change to water|sewer enum'");
+            DB::statement("ALTER TABLE meters MODIFY COLUMN status VARCHAR(50) DEFAULT 'active' COMMENT 'active|inactive|replaced|faulty'");
+        }
 
         // Add composite index for account meter queries
         Schema::table('meters', function (Blueprint $table) {
@@ -145,6 +148,8 @@ return new class extends Migration {
      */
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
         Schema::table('meters', function (Blueprint $table) {
             // Remove indexes
             try {
@@ -176,7 +181,9 @@ return new class extends Migration {
         });
 
         // Revert type and status to enum (may lose data)
-        DB::statement("ALTER TABLE meters MODIFY COLUMN type ENUM('analog', 'digital') DEFAULT 'analog'");
-        DB::statement("ALTER TABLE meters MODIFY COLUMN status ENUM('active', 'inactive', 'replaced') DEFAULT 'active'");
+        if ($driver === 'mysql') {
+            DB::statement("ALTER TABLE meters MODIFY COLUMN type ENUM('analog', 'digital') DEFAULT 'analog'");
+            DB::statement("ALTER TABLE meters MODIFY COLUMN status ENUM('active', 'inactive', 'replaced') DEFAULT 'active'");
+        }
     }
 };

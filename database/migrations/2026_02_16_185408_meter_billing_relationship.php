@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -29,10 +30,7 @@ return new class extends Migration
             DB::table('meter_readings')->where('reading_type', 'manual')->update(['reading_type' => 'actual']);
             DB::table('meter_readings')->where('reading_type', 'automatic')->update(['reading_type' => 'estimated']);
         } else {
-            // For PostgreSQL, SQLite, etc., just change the column type to string if it's not already
-            Schema::table('meter_readings', function (Blueprint $table) {
-                $table->string('reading_type', 20)->default('manual')->change();
-            });
+            DB::table('meter_readings')->where('reading_type', 'automatic')->update(['reading_type' => 'estimated']);
         }
     }
 
@@ -51,10 +49,7 @@ return new class extends Migration
             DB::table('meter_readings')->where('reading_type', 'actual')->update(['reading_type' => 'manual']);
             DB::table('meter_readings')->where('reading_type', 'estimated')->update(['reading_type' => 'automatic']);
         } else {
-            // For other databases, change is minimal
-            Schema::table('meter_readings', function (Blueprint $table) {
-                $table->string('reading_type', 20)->default('manual')->change();
-            });
+            DB::table('meter_readings')->where('reading_type', 'estimated')->update(['reading_type' => 'automatic']);
         }
 
         if (Schema::hasColumn('billing_details', 'meter_id')) {

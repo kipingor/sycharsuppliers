@@ -33,7 +33,9 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::table('billings', function (Blueprint $table) {
+        $driver = Schema::getConnection()->getDriverName();
+
+        Schema::table('billings', function (Blueprint $table) use ($driver) {
             // Add account_id (CRITICAL - main foreign key)
             if (!Schema::hasColumn('billings', 'account_id')) {
                 $table->foreignId('account_id')
@@ -88,10 +90,12 @@ return new class extends Migration {
             // Make meter_id nullable (for backward compatibility)
             // This allows transition period where both FK exist
             if (Schema::hasColumn('billings', 'meter_id')) {
-                $table->foreignId('meter_id')
-                    ->nullable()
-                    ->change()
-                    ->comment('DEPRECATED - use account_id instead');
+                if ($driver !== 'sqlite') {
+                    $table->foreignId('meter_id')
+                        ->nullable()
+                        ->change()
+                        ->comment('DEPRECATED - use account_id instead');
+                }
             }
         });
 
@@ -100,14 +104,13 @@ return new class extends Migration {
         // Needed: 'pending', 'paid', 'overdue', 'partially_paid', 'voided'
         
         // First, expand enum to include new values (backward compatible)
-        DB::statement("ALTER TABLE billings MODIFY COLUMN status ENUM('pending', 'paid', 'write off', 'overdue', 'partially paid', 'void', 'partially_paid', 'voided') DEFAULT 'pending'");
-        
-        // Then, update existing data to match new enum values
         DB::statement("UPDATE billings SET status = 'partially_paid' WHERE status = 'partially paid'");
         DB::statement("UPDATE billings SET status = 'voided' WHERE status = 'void' OR status = 'write off'");
-        
-        // Finally, remove old enum values
-        DB::statement("ALTER TABLE billings MODIFY COLUMN status ENUM('pending', 'paid', 'overdue', 'partially_paid', 'voided') DEFAULT 'pending'");
+
+        if ($driver === 'mysql') {
+            DB::statement("ALTER TABLE billings MODIFY COLUMN status ENUM('pending', 'paid', 'write off', 'overdue', 'partially paid', 'void', 'partially_paid', 'voided') DEFAULT 'pending'");
+            DB::statement("ALTER TABLE billings MODIFY COLUMN status ENUM('pending', 'paid', 'overdue', 'partially_paid', 'voided') DEFAULT 'pending'");
+        }
         
         // Note: Cannot safely change enum via migration without recreating column
         // Recommend handling enum in application layer with string column OR
@@ -147,6 +150,8 @@ return new class extends Migration {
      */
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
         Schema::table('billings', function (Blueprint $table) {
             // Remove indexes first
             try {
@@ -183,5 +188,9 @@ return new class extends Migration {
         // Restore enum values (data may be lost)
         DB::statement("UPDATE billings SET status = 'partially paid' WHERE status = 'partially_paid'");
         DB::statement("UPDATE billings SET status = 'void' WHERE status = 'voided'");
+
+        if ($driver === 'mysql') {
+            DB::statement("ALTER TABLE billings MODIFY COLUMN status ENUM('pending', 'paid', 'write off', 'overdue', 'partially paid', 'void') DEFAULT 'pending'");
+        }
     }
 };

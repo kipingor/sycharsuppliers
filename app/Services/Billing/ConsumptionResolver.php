@@ -70,7 +70,7 @@ class ConsumptionResolver
         }
 
         // Otherwise, calculate difference
-        $consumption = max(0, $endReading->current_reading - $startReading->current_reading);
+        $consumption = max(0, $endReading->reading - $startReading->reading);
 
         return (float) $consumption;
     }

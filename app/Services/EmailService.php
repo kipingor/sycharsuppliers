@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\GenericEmail;
 use App\Models\Account;
 use App\Models\EmailLog;
+use Illuminate\Mail\SentMessage;
 use Illuminate\Support\Facades\Mail;
 
 class EmailService
@@ -44,10 +45,15 @@ class EmailService
         ]);
 
         try {
-            Mail::to($recipient, $name)
+            $sentMessage = Mail::to($recipient, $name)
                 ->send(new GenericEmail($subject, $body, $inReplyTo));
 
-            $log->markAsSent();
+            $log->update([
+                'status'      => EmailLog::STATUS_SENT,
+                'sent_at'     => now(),
+                'message_id'  => $this->extractMessageId($sentMessage),
+                'provider_id' => $this->extractProviderId($sentMessage),
+            ]);
         } catch (\Throwable $e) {
             $log->markAsFailed($e->getMessage());
         }
@@ -96,5 +102,37 @@ class EmailService
     public function sendEmail(string $recipient, string $subject, string $body): void
     {
         $this->send($recipient, $subject, $body);
+    }
+
+    private function extractProviderId(?SentMessage $sentMessage): ?string
+    {
+        if (!$sentMessage) {
+            return null;
+        }
+
+        $headers = $sentMessage->getOriginalMessage()->getHeaders();
+        $header = $headers->get('X-Resend-Email-ID');
+
+        return $header?->getBodyAsString() ?: null;
+    }
+
+    private function extractMessageId(?SentMessage $sentMessage): ?string
+    {
+        if (!$sentMessage) {
+            return null;
+        }
+
+        $messageId = $sentMessage->getOriginalMessage()->getMessageId();
+
+        return $this->cleanMessageId($messageId);
+    }
+
+    private function cleanMessageId(?string $messageId): ?string
+    {
+        if (!$messageId) {
+            return null;
+        }
+
+        return trim($messageId, " <>\t\n\r\0\x0B");
     }
 }

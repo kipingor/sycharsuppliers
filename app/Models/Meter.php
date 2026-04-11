@@ -47,6 +47,7 @@ class Meter extends Model implements Auditable
         'resident_id',
         'meter_number',
         'meter_name',
+        'location',
         'type',
         'meter_type',
         'parent_meter_id',
@@ -59,6 +60,24 @@ class Meter extends Model implements Auditable
         'installed_at' => 'datetime',
         'allocation_percentage' => 'decimal:2',
     ];
+
+    public function getTypeAttribute($value): ?string
+    {
+        return match ($value) {
+            'analog' => 'water',
+            'digital' => 'sewer',
+            default => $value,
+        };
+    }
+
+    public function setTypeAttribute($value): void
+    {
+        $this->attributes['type'] = match ($value) {
+            'water' => 'analog',
+            'sewer' => 'digital',
+            default => $value,
+        };
+    }
 
     /**
      * Attributes to include in audit

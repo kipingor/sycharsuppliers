@@ -106,6 +106,7 @@ class RebillingService
     {
         // Create new billing record
         $newBilling = Billing::create([
+            'meter_id' => $originalBilling->meter_id,
             'account_id' => $originalBilling->account_id,
             'billing_period' => $originalBilling->billing_period,
             'total_amount' => 0, // Will be calculated
