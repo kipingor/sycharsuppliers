@@ -18,13 +18,18 @@ class PaymentFactory extends Factory
      */
     public function definition(): array
     {
+        $meter = Meter::factory()->create();
+
         return [
-            'meter_id' => Meter::factory(),
+            'account_id' => $meter->account_id,
+            'meter_id' => $meter->id,
             'payment_date' => $this->faker->date(),
             'amount' => $this->faker->randomFloat(2, 300, 10000),
             'method' => $this->faker->randomElement(['M-Pesa', 'Bank Transfer', 'Cash']),
+            'reference' => strtoupper(Str::random(10)),
             'transaction_id' => strtoupper(Str::random(12)),
             'status' => $this->faker->randomElement(['pending', 'completed', 'failed']),
+            'reconciliation_status' => 'pending',
         ];
     }
 }

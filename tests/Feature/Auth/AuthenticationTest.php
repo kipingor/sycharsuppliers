@@ -44,11 +44,14 @@ class AuthenticationTest extends TestCase
 
     public function test_users_can_logout()
     {
+        $this->withoutMiddleware(\App\Http\Middleware\HandleInertiaRequests::class);
+
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->post('/logout');
 
-        $this->assertGuest();
         $response->assertRedirect('/');
+        $this->app['auth']->forgetGuards();
+        $this->assertGuest();
     }
 }

@@ -26,7 +26,7 @@ class EmailLog extends Model
         'direction', 'from_email', 'from_name', 'account_id',
         'recipient_email', 'recipient_name', 'subject', 'body',
         'status', 'error_message',
-        'message_id', 'mailgun_id', 'in_reply_to',
+        'message_id', 'provider_id', 'mailgun_id', 'in_reply_to',
         'attachments', 'raw_payload',
         'sent_at', 'read_at', 'delivered_at', 'opened_at', 'bounced_at',
     ];

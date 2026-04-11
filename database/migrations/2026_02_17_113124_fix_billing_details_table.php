@@ -23,6 +23,8 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
         // ─────────────────────────────────────────────
         // STEP 1: Add missing columns (all nullable so
         //         existing rows are not rejected)
@@ -58,12 +60,14 @@ return new class extends Migration
         // STEP 2: Convert reading/units columns from
         //         string → decimal (MySQL-safe via ALTER)
         // ─────────────────────────────────────────────
-        DB::statement('
-            ALTER TABLE billing_details
-                MODIFY COLUMN previous_reading_value DECIMAL(12,2) NULL,
-                MODIFY COLUMN current_reading_value  DECIMAL(12,2) NULL,
-                MODIFY COLUMN units_used             DECIMAL(12,2) NULL
-        ');
+        if ($driver === 'mysql') {
+            DB::statement('
+                ALTER TABLE billing_details
+                    MODIFY COLUMN previous_reading_value DECIMAL(12,2) NULL,
+                    MODIFY COLUMN current_reading_value  DECIMAL(12,2) NULL,
+                    MODIFY COLUMN units_used             DECIMAL(12,2) NULL
+            ');
+        }
 
         // ─────────────────────────────────────────────
         // STEP 3: Populate meter_id
@@ -75,7 +79,7 @@ return new class extends Migration
         // ─────────────────────────────────────────────
 
         // Strategy A
-        if (Schema::hasColumn('billings', 'meter_id')) {
+        if ($driver === 'mysql' && Schema::hasColumn('billings', 'meter_id')) {
             DB::statement('
                 UPDATE billing_details bd
                 INNER JOIN billings b ON bd.billing_id = b.id
@@ -86,18 +90,20 @@ return new class extends Migration
         }
 
         // Strategy B/C — match via account (single meter preferred)
-        DB::statement('
-            UPDATE billing_details bd
-            INNER JOIN billings b ON bd.billing_id = b.id
-            INNER JOIN (
-                SELECT account_id, MIN(id) AS meter_id
-                FROM meters
-                WHERE status = "active"
-                GROUP BY account_id
-            ) m ON b.account_id = m.account_id
-            SET bd.meter_id = m.meter_id
-            WHERE bd.meter_id IS NULL
-        ');
+        if ($driver === 'mysql') {
+            DB::statement('
+                UPDATE billing_details bd
+                INNER JOIN billings b ON bd.billing_id = b.id
+                INNER JOIN (
+                    SELECT account_id, MIN(id) AS meter_id
+                    FROM meters
+                    WHERE status = "active"
+                    GROUP BY account_id
+                ) m ON b.account_id = m.account_id
+                SET bd.meter_id = m.meter_id
+                WHERE bd.meter_id IS NULL
+            ');
+        }
 
         // ─────────────────────────────────────────────
         // STEP 4: Populate rate from historical tariffs
@@ -115,29 +121,33 @@ return new class extends Migration
         // ─────────────────────────────────────────────
         // STEP 5: Calculate amount = units_used * rate
         // ─────────────────────────────────────────────
-        DB::statement('
-            UPDATE billing_details
-            SET amount = ROUND(units_used * rate, 2)
-            WHERE amount IS NULL
-              AND units_used IS NOT NULL
-              AND rate IS NOT NULL
-        ');
+        if ($driver === 'mysql') {
+            DB::statement('
+                UPDATE billing_details
+                SET amount = ROUND(units_used * rate, 2)
+                WHERE amount IS NULL
+                  AND units_used IS NOT NULL
+                  AND rate IS NOT NULL
+            ');
+        }
 
         // ─────────────────────────────────────────────
         // STEP 6: Populate description
         // ─────────────────────────────────────────────
-        DB::statement('
-            UPDATE billing_details bd
-            INNER JOIN billings b   ON bd.billing_id = b.id
-            LEFT  JOIN meters m     ON bd.meter_id   = m.id
-            SET bd.description = CONCAT(
-                "Water consumption for ",
-                COALESCE(m.meter_name, CONCAT("Meter #", bd.meter_id), "Unknown meter"),
-                " - Period: ",
-                COALESCE(b.billing_period, "N/A")
-            )
-            WHERE bd.description IS NULL
-        ');
+        if ($driver === 'mysql') {
+            DB::statement('
+                UPDATE billing_details bd
+                INNER JOIN billings b   ON bd.billing_id = b.id
+                LEFT  JOIN meters m     ON bd.meter_id   = m.id
+                SET bd.description = CONCAT(
+                    "Water consumption for ",
+                    COALESCE(m.meter_name, CONCAT("Meter #", bd.meter_id), "Unknown meter"),
+                    " - Period: ",
+                    COALESCE(b.billing_period, "N/A")
+                )
+                WHERE bd.description IS NULL
+            ');
+        }
 
         // ─────────────────────────────────────────────
         // STEP 7: Add FK index now that data is present
@@ -169,18 +179,22 @@ return new class extends Migration
 
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
         // Remove the FK index first
         Schema::table('billing_details', function (Blueprint $table) {
             $table->dropIndex('bd_meter_id_idx');
         });
 
         // Revert decimal columns back to string (data preserved as text)
-        DB::statement('
-            ALTER TABLE billing_details
-                MODIFY COLUMN previous_reading_value VARCHAR(255) NULL,
-                MODIFY COLUMN current_reading_value  VARCHAR(255) NULL,
-                MODIFY COLUMN units_used             VARCHAR(255) NULL
-        ');
+        if ($driver === 'mysql') {
+            DB::statement('
+                ALTER TABLE billing_details
+                    MODIFY COLUMN previous_reading_value VARCHAR(255) NULL,
+                    MODIFY COLUMN current_reading_value  VARCHAR(255) NULL,
+                    MODIFY COLUMN units_used             VARCHAR(255) NULL
+            ');
+        }
 
         // Drop added columns
         Schema::table('billing_details', function (Blueprint $table) {

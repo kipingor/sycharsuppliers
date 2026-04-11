@@ -6,30 +6,28 @@ use App\Http\Controllers\Api\MeterReadingController;
 use App\Http\Controllers\Api\MeterController;
 use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\Api\PaymentController;
-use App\Http\Controllers\MailgunWebhookController;
+use App\Http\Controllers\ResendWebhookController;
 
 // Public health check
 Route::get('/health', fn() => response()->json(['status' => 'ok']));
 
 /*
 |--------------------------------------------------------------------------
-| Mailgun Webhooks
+| Resend Webhooks
 |--------------------------------------------------------------------------
 |
-| These routes have NO auth and NO CSRF — Mailgun posts from external
-| servers. Signature verification is handled inside the controller.
+| This route has NO auth and NO CSRF — Resend posts from external
+| servers. Svix signature verification is handled inside the controller.
 |
-| Register these URLs in your Mailgun dashboard:
-|   Inbound routing:  https://yourdomain.com/api/webhooks/mailgun/inbound
-|   Delivery events:  https://yourdomain.com/api/webhooks/mailgun/events
+| Register this URL in your Resend dashboard for the events you need:
+|   email.sent, email.delivered, email.opened, email.clicked,
+|   email.bounced, email.failed, email.complained, email.received
+|
+|   https://yourdomain.com/api/webhooks/resend
 |
 */
-Route::prefix('webhooks/mailgun')->group(function () {
-    Route::post('/inbound', [MailgunWebhookController::class, 'inbound'])
-         ->name('webhooks.mailgun.inbound');
-    Route::post('/events',  [MailgunWebhookController::class, 'events'])
-         ->name('webhooks.mailgun.events');
-});
+Route::post('/webhooks/resend', [ResendWebhookController::class, 'handle'])
+    ->name('webhooks.resend');
 
 /*
 |--------------------------------------------------------------------------

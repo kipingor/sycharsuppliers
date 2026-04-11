@@ -15,10 +15,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
         // STRATEGY 1: Copy from billing.meter_id (if billing table has meter_id)
         // Uncomment if billing table has meter_id column
         
-        if (Schema::hasColumn('billings', 'meter_id')) {
+        if ($driver === 'mysql' && Schema::hasColumn('billings', 'meter_id')) {
             DB::statement('
                 UPDATE billing_details bd
                 INNER JOIN billings b ON bd.billing_id = b.id
@@ -32,21 +34,23 @@ return new class extends Migration
 
         // STRATEGY 2: Get meter from account (for accounts with single meter)
         // Use this if each account has only one meter
-        DB::statement('
-            UPDATE billing_details bd
-            INNER JOIN billings b ON bd.billing_id = b.id
-            INNER JOIN (
-                SELECT account_id, MIN(id) as meter_id
-                FROM meters
-                WHERE status = "active"
-                GROUP BY account_id
-                HAVING COUNT(*) = 1
-            ) m ON b.account_id = m.account_id
-            SET bd.meter_id = m.meter_id
-            WHERE bd.meter_id IS NULL
-        ');
-        
-        Log::info('Populated meter_id for accounts with single meter');
+        if ($driver === 'mysql') {
+            DB::statement('
+                UPDATE billing_details bd
+                INNER JOIN billings b ON bd.billing_id = b.id
+                INNER JOIN (
+                    SELECT account_id, MIN(id) as meter_id
+                    FROM meters
+                    WHERE status = "active"
+                    GROUP BY account_id
+                    HAVING COUNT(*) = 1
+                ) m ON b.account_id = m.account_id
+                SET bd.meter_id = m.meter_id
+                WHERE bd.meter_id IS NULL
+            ');
+            
+            Log::info('Populated meter_id for accounts with single meter');
+        }
 
         // STRATEGY 3: Match by meter readings (for complex scenarios)
         // This tries to match billing_details to meters based on the readings

@@ -34,7 +34,9 @@ return new class extends Migration {
      */
     public function up(): void
     {
-        Schema::table('payments', function (Blueprint $table) {
+        $driver = Schema::getConnection()->getDriverName();
+
+        Schema::table('payments', function (Blueprint $table) use ($driver) {
             // Add account_id (CRITICAL - primary foreign key)
             if (!Schema::hasColumn('payments', 'account_id')) {
                 $table->foreignId('account_id')
@@ -80,10 +82,12 @@ return new class extends Migration {
 
             // Make meter_id nullable (for backward compatibility)
             if (Schema::hasColumn('payments', 'meter_id')) {
-                $table->foreignId('meter_id')
-                    ->nullable()
-                    ->change()
-                    ->comment('DEPRECATED - use account_id and payment_allocations instead');
+                if ($driver !== 'sqlite') {
+                    $table->foreignId('meter_id')
+                        ->nullable()
+                        ->change()
+                        ->comment('DEPRECATED - use account_id and payment_allocations instead');
+                }
             }
 
             // Add billing_id if it doesn't exist (for backward compatibility)
@@ -94,10 +98,12 @@ return new class extends Migration {
                     ->comment('DEPRECATED - use payment_allocations instead');
             } else {
                 // Make existing billing_id nullable
-                $table->foreignId('billing_id')
-                    ->nullable()
-                    ->change()
-                    ->comment('DEPRECATED - use payment_allocations instead');
+                if ($driver !== 'sqlite') {
+                    $table->foreignId('billing_id')
+                        ->nullable()
+                        ->change()
+                        ->comment('DEPRECATED - use payment_allocations instead');
+                }
             }
         });
 
@@ -110,14 +116,15 @@ return new class extends Migration {
 
         // Remove unique constraint from transaction_id if it exists
         // (Some payments may not have transaction IDs)
-        try {
-            DB::statement('ALTER TABLE payments DROP INDEX payments_transaction_id_unique');
-        } catch (\Exception $e) {
-            // Index may not exist or have different name
+        if ($driver === 'mysql') {
+            try {
+                DB::statement('ALTER TABLE payments DROP INDEX payments_transaction_id_unique');
+            } catch (\Exception $e) {
+                // Index may not exist or have different name
+            }
         }
 
-        // Make transaction_id nullable if not already
-        if (Schema::hasColumn('payments', 'transaction_id')) {
+        if (Schema::hasColumn('payments', 'transaction_id') && $driver !== 'sqlite') {
             Schema::table('payments', function (Blueprint $table) {
                 $table->string('transaction_id', 100)
                     ->nullable()
@@ -151,6 +158,8 @@ return new class extends Migration {
      */
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+
         Schema::table('payments', function (Blueprint $table) {
             // Remove indexes
             try {
@@ -182,12 +191,14 @@ return new class extends Migration {
         });
 
         // Restore transaction_id unique constraint
-        try {
-            Schema::table('payments', function (Blueprint $table) {
-                $table->string('transaction_id')->unique()->change();
-            });
-        } catch (\Exception $e) {
-            // May fail if NULL values exist
+        if ($driver !== 'sqlite') {
+            try {
+                Schema::table('payments', function (Blueprint $table) {
+                    $table->string('transaction_id')->unique()->change();
+                });
+            } catch (\Exception $e) {
+                // May fail if NULL values exist
+            }
         }
     }
 };

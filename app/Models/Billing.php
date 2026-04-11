@@ -39,6 +39,7 @@ class Billing extends Model implements Auditable
     use \OwenIt\Auditing\Auditable;
 
     protected $fillable = [
+        'meter_id',
         'account_id',
         'billing_period',
         'total_amount',
@@ -47,12 +48,16 @@ class Billing extends Model implements Auditable
         'issued_at',
         'due_date',
         'paid_at',
+        'void_reason',
+        'voided_at',
+        'replaced_billing_id',
     ];
 
     protected $casts = [
         'issued_at' => 'datetime',
         'due_date' => 'date',
         'paid_at' => 'datetime',
+        'voided_at' => 'datetime',
         'total_amount' => MoneyCast::class,
     ];
 
