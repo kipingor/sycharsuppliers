@@ -44,7 +44,7 @@ class ResendWebhookController extends Controller
     private function handleReceived(array $payload): JsonResponse
     {
         $data = $payload['data'];
-        $providerId = $data['email_id'] ?? null;
+        $providerId = $this->getProviderId($data);
 
         if ($providerId && EmailLog::inbound()->where('provider_id', $providerId)->exists()) {
             return response()->json(['status' => 'duplicate'], 200);
@@ -86,15 +86,17 @@ class ResendWebhookController extends Controller
     private function handleOutboundEvent(array $payload): JsonResponse
     {
         $data = $payload['data'];
-        $providerId = $data['email_id'] ?? null;
+        $providerId = $this->getProviderId($data);
         $recipient = $this->firstRecipient($data['to'] ?? []);
-        $log = $this->findOutboundLog($providerId, $recipient, $data['subject'] ?? null);
+        $messageId = $this->cleanMessageId($data['message_id'] ?? null);
+        $log = $this->findOutboundLog($providerId, $recipient, $data['subject'] ?? null, $messageId);
 
         if (!$log) {
             Log::info('Resend event for untracked message', [
                 'type' => $payload['type'] ?? null,
                 'provider_id' => $providerId,
                 'recipient' => $recipient,
+                'message_id' => $messageId,
             ]);
 
             return response()->json(['status' => 'ok'], 200);
@@ -171,7 +173,7 @@ class ResendWebhookController extends Controller
         }
     }
 
-    private function findOutboundLog(?string $providerId, ?string $recipient, ?string $subject): ?EmailLog
+    private function findOutboundLog(?string $providerId, ?string $recipient, ?string $subject, ?string $messageId = null): ?EmailLog
     {
         if ($providerId) {
             $log = EmailLog::outbound()->where('provider_id', $providerId)->first();
@@ -181,11 +183,19 @@ class ResendWebhookController extends Controller
         }
 
         if ($recipient && $subject) {
-            return EmailLog::outbound()
+            $log = EmailLog::outbound()
                 ->where('recipient_email', $recipient)
                 ->where('subject', $subject)
                 ->latest()
                 ->first();
+
+            if ($log) {
+                return $log;
+            }
+        }
+
+        if ($messageId) {
+            return EmailLog::outbound()->where('message_id', $messageId)->first();
         }
 
         return null;
@@ -246,11 +256,31 @@ class ResendWebhookController extends Controller
         return '<p>(no body)</p>';
     }
 
-    private function parseAddress(string $value): array
+    private function parseAddress(string|array|object|null $value): array
     {
+        if (is_array($value)) {
+            if (isset($value['email'])) {
+                return [trim($value['name'] ?? ''), strtolower(trim($value['email']))];
+            }
+
+            if (isset($value[0]) && is_string($value[0])) {
+                return ['', strtolower(trim($value[0]))];
+            }
+
+            return ['', ''];
+        }
+
+        if (is_object($value) && property_exists($value, 'email')) {
+            return [trim($value->name ?? ''), strtolower(trim($value->email))];
+        }
+
+        if (!is_string($value)) {
+            return ['', ''];
+        }
+
         $value = trim($value);
 
-        if (preg_match('/^(?:"?([^"]*)"?\s)?<([^>]+)>$/', $value, $matches)) {
+        if (preg_match('/^(?:"?([^"\n]*)"?\s)?<([^>]+)>$/', $value, $matches)) {
             return [trim($matches[1] ?? ''), strtolower(trim($matches[2]))];
         }
 
@@ -264,6 +294,29 @@ class ResendWebhookController extends Controller
         }
 
         return trim($messageId, " <>\t\n\r\0\x0B");
+    }
+
+    private function getProviderId(array $data): ?string
+    {
+        if (isset($data['email_id']) && is_string($data['email_id'])) {
+            return $data['email_id'];
+        }
+
+        if (isset($data['email'])) {
+            if (is_array($data['email']) && isset($data['email']['id']) && is_string($data['email']['id'])) {
+                return $data['email']['id'];
+            }
+
+            if (is_object($data['email']) && property_exists($data['email'], 'id') && is_string($data['email']->id)) {
+                return $data['email']->id;
+            }
+        }
+
+        if (isset($data['id']) && is_string($data['id'])) {
+            return $data['id'];
+        }
+
+        return null;
     }
 
     private function extractHeader(array $headers, string $name): ?string
@@ -289,8 +342,39 @@ class ResendWebhookController extends Controller
             return strtolower(trim($to));
         }
 
-        if (is_array($to) && isset($to[0]) && is_string($to[0])) {
-            return strtolower(trim($to[0]));
+        if (is_array($to)) {
+            if (isset($to[0])) {
+                return $this->normalizeEmail($to[0]);
+            }
+
+            return $this->normalizeEmail($to);
+        }
+
+        if (is_object($to) && property_exists($to, 'email')) {
+            return strtolower(trim($to->email));
+        }
+
+        return null;
+    }
+
+    private function normalizeEmail(array|object|string|null $recipient): ?string
+    {
+        if (is_string($recipient)) {
+            return strtolower(trim($recipient));
+        }
+
+        if (is_array($recipient)) {
+            if (isset($recipient['email'])) {
+                return strtolower(trim($recipient['email']));
+            }
+
+            if (isset($recipient[0]) && is_string($recipient[0])) {
+                return strtolower(trim($recipient[0]));
+            }
+        }
+
+        if (is_object($recipient) && property_exists($recipient, 'email')) {
+            return strtolower(trim($recipient->email));
         }
 
         return null;
