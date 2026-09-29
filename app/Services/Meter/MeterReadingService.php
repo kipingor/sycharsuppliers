@@ -112,25 +112,40 @@ class MeterReadingService
         // Store old values for audit
         $oldValues = $reading->only(['reading_value', 'reading_date', 'reading_type', 'notes']);
 
-        // Validate new reading value if changed
-        if (isset($data['reading_value']) && $data['reading_value'] != $reading->reading_value) {
-            $this->validateMonotonicReading(
-                $reading->meter,
-                $data['reading_value'],
-                $data['reading_date'] ?? $reading->reading_date,
-                $reading->id
-            );
+        // Normalise the date (validated input is a string; the methods below need Carbon)
+        $newDate = isset($data['reading_date'])
+            ? Carbon::parse($data['reading_date'])
+            : Carbon::parse($reading->reading_date);
+        $newValue = isset($data['reading_value'])
+            ? (float) $data['reading_value']
+            : (float) $reading->reading;
+
+        $valueChanged = isset($data['reading_value']) && $newValue != (float) $reading->reading;
+        $dateChanged  = isset($data['reading_date']) && !$newDate->isSameDay($reading->reading_date);
+
+        // Re-validate ordering and duplicates when value OR date changed
+        if ($valueChanged || $dateChanged) {
+            $this->validateMonotonicReading($reading->meter, $newValue, $newDate, $reading->id);
+        }
+
+        if ($dateChanged) {
+            $this->preventDuplicateReading($reading->meter, $newDate, $reading->id);
         }
 
         return DB::transaction(function () use ($reading, $data, $oldValues) {
             // Update reading
             $reading->update($data);
 
-            // Recalculate consumption if reading value changed
-            if (isset($data['reading_value'])) {
-                $previousReading = $this->getPreviousReading($reading->meter, $reading->reading_date, $reading->id);
+            // Recalculate consumption if value or date changed
+            if (isset($data['reading_value']) || isset($data['reading_date'])) {
+                $reading->refresh();
+                $previousReading = $this->getPreviousReading(
+                    $reading->meter,
+                    Carbon::parse($reading->reading_date),
+                    $reading->id
+                );
                 $reading->consumption = $previousReading
-                    ? max(0, $reading->reading - $previousReading->reading)
+                    ? max(0, (float) $reading->reading - (float) $previousReading->reading)
                     : 0;
                 $reading->save();
             }
@@ -142,7 +157,7 @@ class MeterReadingService
                 context: [
                     'old_values' => $oldValues,
                     'new_values' => $reading->only(['reading_value', 'reading_date', 'reading_type', 'notes']),
-                    'consumption_recalculated' => isset($data['reading_value']),
+                    'consumption_recalculated' => isset($data['reading_value']) || isset($data['reading_date']),
                 ]
             );
 
@@ -422,9 +437,27 @@ class MeterReadingService
      */
     public function hasBeenBilled(MeterReading $reading): bool
     {
-        return DB::table('billing_details')
-            ->where('meter_id', $reading->meter_id)
-            ->where('reading_date', $reading->reading_date)
+        // billing_details has NO reading_date column. A detail is tied to a
+        // reading through its meter and its parent billing's period (YYYY-MM).
+        $readingDate = Carbon::parse($reading->reading_date);
+        $period      = $readingDate->format('Y-m');
+        $nextPeriod  = $readingDate->copy()->addMonth()->format('Y-m');
+        $value       = (float) $reading->reading;
+
+        return DB::table('billing_details as bd')
+            ->join('billings as b', 'b.id', '=', 'bd.billing_id')
+            ->where('bd.meter_id', $reading->meter_id)
+            ->whereNull('b.deleted_at')
+            ->whereNotIn('b.status', ['voided', 'void'])
+            ->where(function ($q) use ($period, $nextPeriod, $value) {
+                // Reading was the "current" reading of its own month's bill
+                $q->where('b.billing_period', $period)
+                  // ...or it was the opening ("previous") reading of next month's bill
+                  ->orWhere(function ($q2) use ($nextPeriod, $value) {
+                      $q2->where('b.billing_period', $nextPeriod)
+                         ->where('bd.previous_reading_value', $value);
+                  });
+            })
             ->exists();
     }
 
