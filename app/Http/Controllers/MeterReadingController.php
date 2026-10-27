@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreMeterReadingRequest;
 use App\Http\Requests\UpdateMeterReadingRequest;
 use App\Http\Resources\MeterReadingResource;
+use App\Models\Billing;
 use App\Models\Meter;
 use App\Models\MeterReading;
+use App\Services\Billing\BillingService;
 use App\Services\Billing\BulkMeterService;
 use App\Services\Meter\MeterReadingService;
 use Illuminate\Http\RedirectResponse;
@@ -36,7 +38,8 @@ class MeterReadingController extends Controller
 
     public function __construct(
         protected MeterReadingService $meterReadingService,
-        protected BulkMeterService $bulkMeterService
+        protected BulkMeterService $bulkMeterService,
+        protected BillingService $billingService
     ) {}
 
     /**
@@ -130,6 +133,7 @@ class MeterReadingController extends Controller
             'unread_meters' => $meters->count(),
             'can' => [
                 'create' => Auth::user()->can('create', MeterReading::class),
+                'generate_bill' => Auth::user()->can('generate', Billing::class),
             ],
         ]);
     }
@@ -144,16 +148,17 @@ class MeterReadingController extends Controller
         try {
             // Delegate to service - ALL validation happens there
             $reading = $this->meterReadingService->createReading($request->validated());
+            $reading->load('meter.account');
 
-            // Check if bulk meter and offer distribution
+            $redirect = redirect()->route('meter-readings.create')
+                ->with('success', 'Reading recorded successfully')
+                ->with('after_reading', $this->afterReadingPrompt($reading));
+
             if ($reading->meter->isBulkMeter() && $reading->reading_type === 'actual') {
-                return redirect()->route('meter-readings.show', $reading)
-                    ->with('success', 'Reading recorded successfully')
-                    ->with('info', 'This is a bulk meter reading. You can distribute it to sub-meters.');
+                return $redirect->with('info', 'This is a bulk meter reading. You can distribute it to sub-meters from the reading details.');
             }
 
-            return redirect()->route('meter-readings.show', $reading)
-                ->with('success', 'Reading recorded successfully');
+            return $redirect;
         } catch (\Exception $e) {
             return back()
                 ->withInput()
@@ -359,26 +364,69 @@ class MeterReadingController extends Controller
     }
 
     /**
+     * Generate a bill from a recorded meter reading
+     */
+    public function generateBill(MeterReading $meterReading): RedirectResponse
+    {
+        $this->authorize('generate', Billing::class);
+
+        $meterReading->load('meter.account');
+        $account = $meterReading->meter->account;
+        $period = $meterReading->reading_date->format('Y-m');
+
+        try {
+            $billing = $this->billingService->generateForAccount($account, $period);
+
+            return back()->with('success', "Bill #{$billing->id} generated for {$account->name} ({$period})");
+        } catch (\Exception $e) {
+            return back()->with('error', 'Bill generation failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Show form for bulk reading entry
      */
     public function bulkCreate(): Response
     {
         $this->authorize('create', MeterReading::class);
 
+        $meters = Meter::active()
+            ->with('account:id,name,account_number')
+            ->select('id', 'meter_number', 'meter_name', 'account_id')
+            ->orderBy('meter_number')
+            ->get();
+
+        $latestReadings = MeterReading::query()
+            ->whereIn('meter_id', $meters->pluck('id'))
+            ->orderByDesc('reading_date')
+            ->get()
+            ->unique('meter_id')
+            ->keyBy('meter_id');
+
+        $currentPeriod = now()->format('Y-m');
+
         return Inertia::render('meter-readings/bulk-create', [
-            'meters' => Meter::active()
-                ->with('account')
-                ->select('id', 'meter_number', 'meter_name', 'account_id')
-                ->orderBy('meter_number')
-                ->get()
-                ->map(fn($m) => [
-                    'id' => $m->id,
-                    'meter_number' => $m->meter_number,
-                    'meter_name' => $m->meter_name,
-                    'account_name' => $m->account->name,
-                    'current_reading' => $m->getCurrentReading(),
-                    'last_reading_date' => $m->getLastReadingDate()?->format('Y-m-d'),
-                ]),
+            'current_month' => $currentPeriod,
+            'can' => [
+                'create' => Auth::user()->can('create', MeterReading::class),
+                'generate_bill' => Auth::user()->can('generate', Billing::class),
+            ],
+            'meters' => $meters->map(function ($meter) use ($latestReadings, $currentPeriod) {
+                $latest = $latestReadings->get($meter->id);
+                $latestPeriod = $latest?->reading_date?->format('Y-m');
+
+                return [
+                    'id' => $meter->id,
+                    'meter_number' => $meter->meter_number,
+                    'meter_name' => $meter->meter_name,
+                    'account_id' => $meter->account_id,
+                    'account_name' => $meter->account?->name,
+                    'account_number' => $meter->account?->account_number,
+                    'current_reading' => $latest?->reading_value,
+                    'last_reading_date' => $latest?->reading_date?->format('Y-m-d'),
+                    'has_reading_this_period' => $latestPeriod === $currentPeriod,
+                ];
+            }),
         ]);
     }
 
@@ -394,33 +442,112 @@ class MeterReadingController extends Controller
         $validated = $request->validate([
             'readings' => 'required|array|min:1',
             'readings.*.meter_id' => 'required|exists:meters,id',
-            'readings.*.reading' => 'required|numeric|min:0',
+            'readings.*.reading_value' => 'nullable|numeric|min:0',
+            'readings.*.notes' => 'nullable|string|max:1000',
             'reading_date' => 'required|date|before_or_equal:today',
+            'generate_bills' => 'sometimes|boolean',
         ]);
 
-        try {
-            $readingDate = Carbon::parse($validated['reading_date']);
-            $readingsWithDate = collect($validated['readings'])
-                ->map(fn(array $r) => array_merge($r, ['reading_date' => $readingDate]))
-                ->all();
+        $readingDate = Carbon::parse($validated['reading_date']);
+        $readingsWithDate = collect($validated['readings'])
+            ->filter(fn(array $r) => isset($r['reading_value']) && $r['reading_value'] !== '' && $r['reading_value'] !== null)
+            ->map(fn(array $r) => [
+                'meter_id' => $r['meter_id'],
+                'reading_value' => $r['reading_value'],
+                'reading_date' => $readingDate,
+                'reading_type' => 'actual',
+                'notes' => $r['notes'] ?? null,
+            ])
+            ->values()
+            ->all();
 
+        if (count($readingsWithDate) === 0) {
+            return back()
+                ->withInput()
+                ->with('error', 'Enter at least one meter reading before saving.');
+        }
+
+        try {
             $result = $this->meterReadingService->createBulkReadings(
                 $readingsWithDate,
                 ['reading_date' => $readingDate->toDateString()]
             );
 
-            if ($result['failed'] > 0) {
-                return back()
-                    ->with('warning', "Created {$result['created']} readings. {$result['failed']} failed.")
-                    ->with('errors', $result['errors']);
+            $createdCount = $result['created']->count();
+            $failedCount = count($result['failed']);
+            $message = "Created {$createdCount} reading(s)";
+
+            if ($failedCount > 0) {
+                $message .= ". {$failedCount} failed.";
+            }
+
+            if ($request->boolean('generate_bills') && $createdCount > 0) {
+                $this->authorize('generate', Billing::class);
+                $period = $readingDate->format('Y-m');
+                $generated = 0;
+                $billFailures = 0;
+
+                $accounts = Meter::query()
+                    ->with('account')
+                    ->whereKey($result['created']->pluck('meter_id'))
+                    ->get()
+                    ->pluck('account')
+                    ->filter()
+                    ->unique('id');
+
+                foreach ($accounts as $account) {
+                    try {
+                        $this->billingService->generateForAccount($account, $period);
+                        $generated++;
+                    } catch (\Exception $e) {
+                        $billFailures++;
+                    }
+                }
+
+                $message .= " Generated {$generated} bill(s)";
+                if ($billFailures > 0) {
+                    $message .= " ({$billFailures} already billed or failed).";
+                } else {
+                    $message .= '.';
+                }
+            }
+
+            if ($failedCount > 0) {
+                return redirect()->route('meter-readings.bulk.create')
+                    ->with('warning', $message);
             }
 
             return redirect()->route('meter-readings.index')
-                ->with('success', "Successfully created {$result['created']} readings");
+                ->with('success', $message);
         } catch (\Exception $e) {
             return back()
                 ->withInput()
                 ->with('error', $e->getMessage());
         }
+    }
+
+    /**
+     * Prompt payload shown after recording a single reading
+     */
+    protected function afterReadingPrompt(MeterReading $reading): array
+    {
+        $period = $reading->reading_date->format('Y-m');
+        $account = $reading->meter->account;
+
+        $existingBill = Billing::where('account_id', $account->id)
+            ->where('billing_period', $period)
+            ->whereNotIn('status', ['voided'])
+            ->first();
+
+        return [
+            'reading_id' => $reading->id,
+            'meter_id' => $reading->meter_id,
+            'meter_number' => $reading->meter->meter_number,
+            'account_id' => $account->id,
+            'account_name' => $account->name,
+            'billing_period' => $period,
+            'can_generate_bill' => !$existingBill && Auth::user()->can('generate', Billing::class),
+            'existing_bill_id' => $existingBill?->id,
+        ];
     }
 }

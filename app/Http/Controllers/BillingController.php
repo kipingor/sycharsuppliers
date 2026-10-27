@@ -264,6 +264,7 @@ class BillingController extends Controller
                 'void' => Auth::user()->can('void', $billing),
                 'rebill' => Auth::user()->can('rebill', $billing),
             ],
+            'navigation' => $this->getBillNavigation($billing),
         ]);
     }
 
@@ -415,6 +416,34 @@ class BillingController extends Controller
     }
 
     /**
+     * Download a ZIP of all bill statements for a billing period
+     */
+    public function downloadPeriod(Request $request)
+    {
+        $this->authorize('viewAny', Billing::class);
+
+        $request->validate([
+            'period' => 'required|date_format:Y-m',
+        ]);
+
+        $period = $request->input('period');
+
+        try {
+            $zipPath = $this->statementGenerator->generatePeriodBillsZip($period);
+
+            return response()->download(
+                $zipPath,
+                "bills_{$period}.zip",
+                ['Content-Type' => 'application/zip']
+            )->deleteFileAfterSend(true);
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to download period bills: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Send bill statement via email
      */
     public function sendStatement(Request $request, Billing $billing): RedirectResponse
@@ -469,6 +498,26 @@ class BillingController extends Controller
             'bills_' . now()->format('Y-m-d_His') . '.csv',
             ['Content-Type' => 'text/csv']
         );
+    }
+
+    /**
+     * Previous / next bill in the same billing period
+     */
+    protected function getBillNavigation(Billing $billing): array
+    {
+        $periodBillIds = Billing::where('billing_period', $billing->billing_period)
+            ->orderBy('id')
+            ->pluck('id');
+
+        $index = $periodBillIds->search($billing->id);
+
+        return [
+            'previous_id' => $index !== false && $index > 0 ? $periodBillIds[$index - 1] : null,
+            'next_id' => $index !== false && $index < $periodBillIds->count() - 1 ? $periodBillIds[$index + 1] : null,
+            'position' => $index === false ? null : $index + 1,
+            'total' => $periodBillIds->count(),
+            'period' => $billing->billing_period,
+        ];
     }
 
     /**

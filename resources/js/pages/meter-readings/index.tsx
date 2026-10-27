@@ -4,7 +4,7 @@ import { type BreadcrumbItem, type SharedData } from "@/types";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, EllipsisVertical, Eye, Pencil, Trash, TrendingUp, Download } from "lucide-react";
+import { PlusCircle, EllipsisVertical, Eye, Pencil, Trash, TrendingUp, Download, Layers } from "lucide-react";
 import { 
     Table, 
     TableBody, 
@@ -170,11 +170,18 @@ export default function MeterReadings() {
                             <Download size={16} className="mr-2" /> Export
                         </Button>
                         {can.create && (
-                            <Link href={route('meter-readings.create')}>
-                                <Button className="flex items-center gap-2">
-                                    <PlusCircle size={18} /> Record Reading
-                                </Button>
-                            </Link>
+                            <>
+                                <Link href={route('meter-readings.bulk.create')}>
+                                    <Button variant="outline" className="flex items-center gap-2">
+                                        <Layers size={18} /> Bulk readings
+                                    </Button>
+                                </Link>
+                                <Link href={route('meter-readings.create')}>
+                                    <Button className="flex items-center gap-2">
+                                        <PlusCircle size={18} /> Record Reading
+                                    </Button>
+                                </Link>
+                            </>
                         )}
                     </div>
                 </div>

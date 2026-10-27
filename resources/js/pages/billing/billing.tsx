@@ -8,8 +8,9 @@ import { formatCurrency } from '@/lib/utils';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { debounce } from 'lodash';
-import { EllipsisVertical, Eye, PlusCircle } from 'lucide-react';
+import { EllipsisVertical, Eye, PlusCircle, Download } from 'lucide-react';
 import { useState } from 'react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Account {
     id: number;
@@ -60,22 +61,43 @@ export default function Bills() {
     const { bills, filters, accounts, availablePeriods, can, auth } = usePage<SharedData & BillsPageProps>().props;
 
     const [search, setSearch] = useState<string>(filters.search || '');
+    const [period, setPeriod] = useState<string>(filters.period || '');
 
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSearch = debounce((query: string) => {
+    const applyFilters = (next: { search?: string; period?: string }) => {
         setIsLoading(true);
         router.get(
             route('billings.index'),
-            { search: query },
             {
-                only: ['bills'],
+                search: next.search ?? search,
+                period: next.period ?? period,
+            },
+            {
+                only: ['bills', 'filters'],
                 replace: true,
                 preserveState: true,
                 onFinish: () => setIsLoading(false),
             },
         );
+    };
+
+    const handleSearch = debounce((query: string) => {
+        applyFilters({ search: query });
     }, 300);
+
+    const handlePeriodChange = (value: string) => {
+        const nextPeriod = value === 'all' ? '' : value;
+        setPeriod(nextPeriod);
+        applyFilters({ period: nextPeriod });
+    };
+
+    const handleDownloadPeriod = () => {
+        if (!period) {
+            return;
+        }
+        window.location.href = route('billings.period.download', { period });
+    };
 
     {isLoading && <div>Loading...</div>}
 
@@ -102,7 +124,7 @@ export default function Bills() {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <div className="mb-4 flex items-center justify-between">
                     <h1 className="text-2xl font-bold">Bills</h1>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                         <Input
                             type="text"
                             placeholder="Search bills..."
@@ -113,6 +135,22 @@ export default function Bills() {
                             }}
                             className="w-64"
                         />
+                        <Select value={period || 'all'} onValueChange={handlePeriodChange}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Billing period" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All periods</SelectItem>
+                                {availablePeriods.map((availablePeriod) => (
+                                    <SelectItem key={availablePeriod} value={availablePeriod}>
+                                        {availablePeriod}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Button variant="outline" onClick={handleDownloadPeriod} disabled={!period} className="flex items-center gap-2">
+                            <Download size={16} /> Download cycle
+                        </Button>
                         {can.generate && (
                             <Link href={route('billings.create')}>
                                 <Button className="flex items-center gap-2">

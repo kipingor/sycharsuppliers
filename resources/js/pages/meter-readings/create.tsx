@@ -6,8 +6,17 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { Activity, AlertCircle, CheckCircle, TrendingUp } from 'lucide-react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Activity, AlertCircle, CheckCircle, FileText, List, PlusCircle, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 interface Meter {
     id: number;
@@ -22,6 +31,7 @@ interface CreateReadingPageProps {
     current_month: string;
     can: {
         create: boolean;
+        generate_bill?: boolean;
     };
     meter_id?: number; // Pre-selected meter from query param
 }
@@ -38,9 +48,9 @@ const readingTypes = [
 ];
 
 export default function CreateMeterReading() {
-    const { meters, can, meter_id, current_month } = usePage<SharedData & CreateReadingPageProps>().props;
+    const { meters, can, meter_id, current_month, flash } = usePage<SharedData & CreateReadingPageProps>().props;
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, reset } = useForm({
         meter_id: meter_id?.toString() || '',
         reading_date: new Date().toISOString().split('T')[0],
         reading_value: '',
@@ -48,9 +58,36 @@ export default function CreateMeterReading() {
         notes: '',
     });
 
+    const [promptOpen, setPromptOpen] = useState(false);
+    const [generatingBill, setGeneratingBill] = useState(false);
+    const afterReading = flash?.after_reading;
+
+    useEffect(() => {
+        if (afterReading) {
+            setPromptOpen(true);
+            reset('meter_id', 'reading_value', 'notes');
+        }
+    }, [afterReading, reset]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         post(route('meter-readings.store'));
+    };
+
+    const handleGenerateBill = () => {
+        if (!afterReading) {
+            return;
+        }
+        setGeneratingBill(true);
+        router.post(
+            route('meter-readings.generate-bill', afterReading.reading_id),
+            {},
+            {
+                preserveScroll: true,
+                onFinish: () => setGeneratingBill(false),
+                onSuccess: () => setPromptOpen(false),
+            },
+        );
     };
 
     const selectedMeter = meters.find((m) => m.id === Number(data.meter_id));
@@ -60,6 +97,51 @@ export default function CreateMeterReading() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Record Reading" />
+
+            <Dialog open={promptOpen} onOpenChange={setPromptOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reading recorded</DialogTitle>
+                        <DialogDescription>
+                            {afterReading?.meter_number
+                                ? `Meter ${afterReading.meter_number}`
+                                : 'This meter'}{' '}
+                            for {afterReading?.account_name ?? 'the account'} has been saved
+                            {afterReading?.billing_period ? ` for ${afterReading.billing_period}` : ''}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground">
+                        {afterReading?.can_generate_bill
+                            ? 'Do you also want to generate the bill for this meter reading?'
+                            : afterReading?.existing_bill_id
+                              ? 'A bill already exists for this account and period.'
+                              : 'You can add another reading or return to the readings list.'}
+                    </p>
+                    <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+                        {afterReading?.can_generate_bill && (
+                            <Button onClick={handleGenerateBill} disabled={generatingBill} className="w-full">
+                                <FileText size={16} className="mr-2" />
+                                {generatingBill ? 'Generating bill...' : 'Yes, generate the bill'}
+                            </Button>
+                        )}
+                        {afterReading?.existing_bill_id && (
+                            <Link href={route('billings.show', afterReading.existing_bill_id)} className="w-full">
+                                <Button variant="outline" className="w-full">
+                                    <FileText size={16} className="mr-2" /> View existing bill
+                                </Button>
+                            </Link>
+                        )}
+                        <Button variant="outline" className="w-full" onClick={() => setPromptOpen(false)}>
+                            <PlusCircle size={16} className="mr-2" /> Add another reading
+                        </Button>
+                        <Link href={route('meter-readings.index')} className="w-full">
+                            <Button variant="ghost" className="w-full">
+                                <List size={16} className="mr-2" /> Back to readings
+                            </Button>
+                        </Link>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="mx-auto max-w-3xl py-6">
                 <Card>
