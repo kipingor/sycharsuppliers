@@ -29,6 +29,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [BillingController::class, 'index'])->name('index');
         Route::post('/', [BillingController::class, 'store'])->name('store');
         Route::get('/create', [BillingController::class, 'create'])->name('create');
+        Route::post('/generate-all', [BillingController::class, 'generateAll'])->name('generate-all');
+        Route::get('/export/csv', [BillingController::class, 'export'])->name('export');
+        Route::get('/period/download', [BillingController::class, 'downloadPeriod'])->name('period.download');
+
         Route::get('/{billing}', [BillingController::class, 'show'])->name('show');
         Route::put('/{billing}', [BillingController::class, 'update'])->name('update');
         Route::delete('/{billing}', [BillingController::class, 'destroy'])->name('destroy');
@@ -37,14 +41,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Billing actions
         Route::post('/{billing}/void', [BillingController::class, 'void'])->name('void');
         Route::post('/{billing}/rebill', [BillingController::class, 'rebill'])->name('rebill');
-        Route::post('/generate-all', [BillingController::class, 'generateAll'])->name('generate-all');
 
         // Statements
         Route::get('/{billing}/statement', [BillingController::class, 'downloadStatement'])->name('statement.download');
         Route::post('/{billing}/statement/send', [BillingController::class, 'sendStatement'])->name('statement.send');
-
-        // Export
-        Route::get('/export/csv', [BillingController::class, 'export'])->name('export');
 
         // Apply credit note to a specific bill (POST from billing show page)
         Route::post('/{billing}/credit-notes', [CreditNoteController::class, 'store'])
@@ -108,20 +108,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/', [MeterReadingController::class, 'index'])->name('index');
         Route::post('/', [MeterReadingController::class, 'store'])->name('store');
         Route::get('/create', [MeterReadingController::class, 'create'])->name('create');
+        Route::get('/bulk/create', [MeterReadingController::class, 'bulkCreate'])->name('bulk.create');
+        Route::post('/bulk', [MeterReadingController::class, 'bulkStore'])->name('bulk.store');
+        Route::get('/export', [MeterReadingController::class, 'export'])->name('export');
+        Route::get('/meter/{meter}', [MeterReadingController::class, 'forMeter'])->name('for-meter');
+
         Route::get('/{meterReading}', [MeterReadingController::class, 'show'])->name('show');
         Route::put('/{meterReading}', [MeterReadingController::class, 'update'])->name('update');
         Route::delete('/{meterReading}', [MeterReadingController::class, 'destroy'])->name('destroy');
         Route::get('/{meterReading}/edit', [MeterReadingController::class, 'edit'])->name('edit');
 
-        // Meter-specific readings
-        Route::get('/meter/{meter}', [MeterReadingController::class, 'forMeter'])->name('for-meter');
-
-        // Bulk meter actions
         Route::post('/{meterReading}/distribute', [MeterReadingController::class, 'distribute'])->name('distribute');
-
-        // Export
-        Route::get('/export', [MeterReadingController::class, 'export'])
-            ->name('export');
+        Route::post('/{meterReading}/generate-bill', [MeterReadingController::class, 'generateBill'])->name('generate-bill');
     });
 
     // ========================================

@@ -46,11 +46,23 @@ export interface NavItem {
     items?: NavItem[];
 }
 
+export interface AfterReadingPrompt {
+    reading_id: number;
+    meter_id: number;
+    meter_number?: string;
+    account_id: number;
+    account_name?: string;
+    billing_period: string;
+    can_generate_bill: boolean;
+    existing_bill_id?: number | null;
+}
+
 export interface FlashMessages {
     success?: string;
     error?: string;
     warning?: string;
     info?: string;
+    after_reading?: AfterReadingPrompt | null;
 }
 
 export interface SharedData {

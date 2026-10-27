@@ -349,6 +349,51 @@ class StatementGenerator
     }
 
     /**
+     * Generate a ZIP archive of bill PDFs for a billing period.
+     *
+     * @return string Absolute path to the temporary ZIP file
+     */
+    public function generatePeriodBillsZip(string $billingPeriod): string
+    {
+        if (! class_exists(\ZipArchive::class)) {
+            throw new \RuntimeException('ZIP support is not available on this server.');
+        }
+
+        $bills = Billing::with(['account', 'details.meter', 'allocations.payment', 'creditNotes'])
+            ->where('billing_period', $billingPeriod)
+            ->where('status', '!=', 'voided')
+            ->orderBy('id')
+            ->get();
+
+        if ($bills->isEmpty()) {
+            throw new \InvalidArgumentException("No bills found for period {$billingPeriod}");
+        }
+
+        $directory = storage_path('app/temp');
+        if (! is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $zipPath = $directory . DIRECTORY_SEPARATOR . 'bills_' . $billingPeriod . '_' . uniqid() . '.zip';
+        $zip = new \ZipArchive();
+
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            throw new \RuntimeException('Failed to create ZIP archive for period bills.');
+        }
+
+        foreach ($bills as $bill) {
+            $pdf = $this->generateBillStatement($bill);
+            $accountNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($bill->account?->account_number ?? 'account'));
+            $filename = sprintf('bill_%s_%s_%d.pdf', $billingPeriod, $accountNumber, $bill->id);
+            $zip->addFromString($filename, $pdf->output());
+        }
+
+        $zip->close();
+
+        return $zipPath;
+    }
+
+    /**
      * Generate statement filename
      *
      * @param string $type 'bill' or 'account'

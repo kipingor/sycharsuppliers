@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash, XCircle, RotateCcw, Download, Mail, FileMinus, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash, XCircle, RotateCcw, Download, Mail, FileMinus, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
@@ -94,10 +94,19 @@ interface Bill {
     days_overdue?: number;
 }
 
+interface BillNavigation {
+    previous_id: number | null;
+    next_id: number | null;
+    position: number | null;
+    total: number;
+    period: string;
+}
+
 interface BillShowPageProps {
     bill: Bill;
     can: { update: boolean; delete: boolean; void: boolean; rebill: boolean };
     accounts?: Account[];  // for previous-resident lookup
+    navigation?: BillNavigation;
 }
 
 // ─── Credit Note Modal ────────────────────────────────────────────────────────
@@ -340,7 +349,7 @@ function VoidModal({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function BillShow() {
-    const { bill, can, accounts = [] } = usePage<SharedData & BillShowPageProps>().props;
+    const { bill, can, accounts = [], navigation } = usePage<SharedData & BillShowPageProps>().props;
 
     const [showCreditModal, setShowCreditModal] = useState(false);
     const [voidingNote,     setVoidingNote]     = useState<CreditNote | null>(null);
@@ -439,7 +448,36 @@ export default function BillShow() {
                         <h1 className="text-2xl font-bold">Bill #{bill.id}</h1>
                         <p className="text-gray-500 text-sm mt-1">
                             {bill.summary?.formatted_period || bill.billing_period}
+                            {navigation?.position && navigation.total > 0 && (
+                                <span className="ml-2">
+                                    · {navigation.position} of {navigation.total} this cycle
+                                </span>
+                            )}
                         </p>
+                        <div className="mt-2 flex items-center gap-2">
+                            {navigation?.previous_id ? (
+                                <Link href={route('billings.show', navigation.previous_id)}>
+                                    <Button variant="outline" size="sm">
+                                        <ChevronLeft size={16} className="mr-1" /> Previous
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <Button variant="outline" size="sm" disabled>
+                                    <ChevronLeft size={16} className="mr-1" /> Previous
+                                </Button>
+                            )}
+                            {navigation?.next_id ? (
+                                <Link href={route('billings.show', navigation.next_id)}>
+                                    <Button variant="outline" size="sm">
+                                        Next <ChevronRight size={16} className="ml-1" />
+                                    </Button>
+                                </Link>
+                            ) : (
+                                <Button variant="outline" size="sm" disabled>
+                                    Next <ChevronRight size={16} className="ml-1" />
+                                </Button>
+                            )}
+                        </div>
                     </div>
                     <div className="flex gap-2 flex-wrap justify-end">
                         <Button variant="outline" size="sm" onClick={handleDownloadStatement}>
