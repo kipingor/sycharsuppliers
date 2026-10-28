@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Pencil, Trash, Gauge, TrendingUp, Activity, Receipt, FileText } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
+import { Table, TableBody, TableCell, TableHead, TableRow } from '@/components/table';
 import { Badge } from '@/components/ui/badge';
 
 interface Account {
@@ -53,6 +53,10 @@ interface Meter {
     current_reading?: number;
     total_consumption?: number;
     last_reading_date?: string;
+    replacement_meter?: {
+        id: number;
+        meter_number: string;
+    } | null;
     notes?: string;
     created_at: string;
 }
@@ -81,6 +85,7 @@ export default function MeterShow() {
         inactive: "bg-gray-400/20 text-gray-700 dark:bg-gray-400/10 dark:text-gray-300",
         maintenance: "bg-yellow-400/20 text-yellow-700 dark:bg-yellow-400/10 dark:text-yellow-300",
         faulty: "bg-red-400/20 text-red-700 dark:bg-red-400/10 dark:text-red-300",
+        replaced: "bg-amber-400/20 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300",
     };
 
     const billStatusClasses: Record<string, string> = {
@@ -114,19 +119,38 @@ export default function MeterShow() {
                         <p className="text-gray-500 text-sm mt-1">{meter.meter_name}</p>
                     </div>
                     <div className="flex gap-2 flex-wrap justify-end">
-                        {can.createReading && (
+                        {can.createReading && meter.status === 'active' && (
                             <Link href={route('meter-readings.create', { meter_id: meter.id })}>
                                 <Button variant="default" size="sm">
                                     <Activity size={16} className="mr-2" /> Record Reading
                                 </Button>
                             </Link>
                         )}
-                        {can.update && (
+                        {can.update && meter.status === 'faulty' && !meter.replacement_meter && (
+                            <Link href={route('meters.replace.create', meter.id)}>
+                                <Button variant="default" size="sm">
+                                    <Gauge size={16} className="mr-2" /> Replace Meter
+                                </Button>
+                            </Link>
+                        )}
+                        {can.update && meter.status !== 'replaced' && (
                             <Link href={route('meters.edit', meter.id)}>
                                 <Button variant="outline" size="sm">
                                     <Pencil size={16} className="mr-2" /> Edit
                                 </Button>
                             </Link>
+                        )}
+                        {can.update && meter.status !== 'faulty' && meter.status !== 'replaced' && (
+                            <span className="text-xs text-gray-500">
+                                Set status to Faulty in{' '}
+                                <Link
+                                    href={route('meters.edit', meter.id)}
+                                    className="text-blue-600 hover:underline"
+                                >
+                                    Edit
+                                </Link>{' '}
+                                to enable replacement.
+                            </span>
                         )}
                         {can.delete && (
                             <Button
@@ -157,6 +181,17 @@ export default function MeterShow() {
                                     {meter.status}
                                 </Badge>
                             </div>
+                            {meter.replacement_meter && (
+                                <div>
+                                    <p className="text-xs text-gray-500">Replaced by</p>
+                                    <Link
+                                        href={route('meters.show', meter.replacement_meter.id)}
+                                        className="font-medium text-blue-600 hover:underline"
+                                    >
+                                        {meter.replacement_meter.meter_number}
+                                    </Link>
+                                </div>
+                            )}
                             {meter.location && (
                                 <div>
                                     <p className="text-xs text-gray-500">Location</p>
@@ -286,7 +321,7 @@ export default function MeterShow() {
                                 <Activity size={20} />
                                 Recent Readings
                             </CardTitle>
-                            {can.createReading && (
+                            {can.createReading && meter.status === 'active' && (
                                 <Link href={route('meter-readings.create', { meter_id: meter.id })}>
                                     <Button variant="outline" size="sm">
                                         Record Reading
@@ -334,7 +369,7 @@ export default function MeterShow() {
                         ) : (
                             <div className="text-center py-8">
                                 <p className="text-gray-500">No readings recorded yet.</p>
-                                {can.createReading && (
+                                {can.createReading && meter.status === 'active' && (
                                     <Link href={route('meter-readings.create', { meter_id: meter.id })}>
                                         <Button className="mt-4">Record First Reading</Button>
                                     </Link>

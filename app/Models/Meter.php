@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Contracts\Auditable;
 
@@ -54,6 +55,7 @@ class Meter extends Model implements Auditable
         'allocation_percentage',
         'status',
         'installed_at',
+        'replaced_by_meter_id',
     ];
 
     protected $casts = [
@@ -92,6 +94,7 @@ class Meter extends Model implements Auditable
         'parent_meter_id',
         'allocation_percentage',
         'status',
+        'replaced_by_meter_id',
     ];
 
     /**
@@ -140,6 +143,16 @@ class Meter extends Model implements Auditable
     public function subMeters(): HasMany
     {
         return $this->hasMany(Meter::class, 'parent_meter_id');
+    }
+
+    public function replacementMeter(): BelongsTo
+    {
+        return $this->belongsTo(Meter::class, 'replaced_by_meter_id');
+    }
+
+    public function replacedMeter(): HasOne
+    {
+        return $this->hasOne(Meter::class, 'replaced_by_meter_id');
     }
 
     /**

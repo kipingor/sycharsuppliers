@@ -84,6 +84,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [MeterController::class, 'store'])->name('store');
         Route::get('/create', [MeterController::class, 'create'])->name('create');
         Route::get('/{meter}', [MeterController::class, 'show'])->name('show');
+        Route::get('/{meter}/replace', [MeterController::class, 'replacementForm'])->name('replace.create');
+        Route::post('/{meter}/replace', [MeterController::class, 'replace'])->name('replace');
         Route::put('/{meter}', [MeterController::class, 'update'])->name('update');
         Route::delete('/{meter}', [MeterController::class, 'destroy'])->name('destroy');
         Route::get('/{meter}/edit', [MeterController::class, 'edit'])->name('edit');
