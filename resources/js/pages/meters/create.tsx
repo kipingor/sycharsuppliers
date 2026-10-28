@@ -22,14 +22,22 @@ interface Account {
     account_number: string;
 }
 
+interface Resident {
+    id: number;
+    name: string;
+    account_number: string;
+}
+
 interface BulkMeter {
     id: number;
+    account_id: number;
     meter_number: string;
     meter_name: string;
 }
 
 interface CreateMeterPageProps {
     accounts: Account[];
+    residents: Resident[];
     bulkMeters: BulkMeter[];
     can: {
         create: boolean;
@@ -40,12 +48,15 @@ type CreateMeterForm = {
     meter_number: string;
     meter_name: string;
     account_id: string;
+    resident_id: string;
+    type: 'water' | 'sewer';
     meter_type: string;
-    bulk_meter_id: string;
+    parent_meter_id: string;
+    allocation_percentage: string;
     status: string;
     initial_reading: string;
     location: string;
-    installation_date: string;
+    installed_at: string;
     notes: string;
     is_sub_meter: boolean;
 } & Record<string, import('@inertiajs/core').FormDataConvertible>;
@@ -63,23 +74,25 @@ const meterTypes = [
 const meterStatuses = [
     { value: 'active', label: 'Active' },
     { value: 'inactive', label: 'Inactive' },
-    { value: 'maintenance', label: 'Under Maintenance' },
     { value: 'faulty', label: 'Faulty' },
 ];
 
 export default function CreateMeter() {
-    const { accounts, bulkMeters, can } = usePage<SharedData & CreateMeterPageProps>().props;
+    const { accounts, residents, bulkMeters, can } = usePage<SharedData & CreateMeterPageProps>().props;
     
     const { data, setData, post, processing, errors } = useForm<CreateMeterForm>({
         meter_number: '',
         meter_name: '',
         account_id: '',
+        resident_id: '',
+        type: 'water',
         meter_type: 'individual',
-        bulk_meter_id: '',
+        parent_meter_id: '',
+        allocation_percentage: '',
         status: 'active',
         initial_reading: '0',
         location: '',
-        installation_date: new Date().toISOString().split('T')[0],
+        installed_at: new Date().toISOString().split('T')[0],
         notes: '',
         is_sub_meter: false,
     });
@@ -88,6 +101,13 @@ export default function CreateMeter() {
         e.preventDefault();
         post(route('meters.store'));
     };
+    const availableBulkMeters = bulkMeters.filter(
+        (meter) => meter.account_id.toString() === data.account_id,
+    );
+    const selectedAccount = accounts.find((account) => account.id.toString() === data.account_id);
+    const availableResidents = residents.filter(
+        (resident) => resident.account_number === selectedAccount?.account_number,
+    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -149,6 +169,24 @@ export default function CreateMeter() {
                                 </p>
                             </div>
 
+                            <div>
+                                <Label htmlFor="type">Service *</Label>
+                                <Select
+                                    value={data.type}
+                                    onValueChange={(value: 'water' | 'sewer') => setData('type', value)}
+                                    disabled={!can.create || processing}
+                                >
+                                    <SelectTrigger className="mt-1">
+                                        <SelectValue placeholder="Select service" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="water">Water</SelectItem>
+                                        <SelectItem value="sewer">Sewer</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {errors.type && <p className="mt-1 text-sm text-red-600">{errors.type}</p>}
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Meter Number */}
                                 <div>
@@ -185,31 +223,57 @@ export default function CreateMeter() {
                                 </div>
                             </div>
 
-                            {/* Account Selection (for individual meters) */}
-                            {data.meter_type === 'individual' && (
-                                <div>
-                                    <Label htmlFor="account_id">Account *</Label>
-                                    <Select
-                                        value={data.account_id}
-                                        onValueChange={(value) => setData('account_id', value)}
-                                        disabled={!can.create || processing}
-                                    >
-                                        <SelectTrigger className="mt-1">
-                                            <SelectValue placeholder="Select account" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {accounts.map((account) => (
-                                                <SelectItem key={account.id} value={account.id.toString()}>
-                                                    {account.name} ({account.account_number})
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    {errors.account_id && (
-                                        <p className="text-sm text-red-600 mt-1">{errors.account_id}</p>
-                                    )}
-                                </div>
-                            )}
+                            <div>
+                                <Label htmlFor="account_id">Account *</Label>
+                                <Select
+                                    value={data.account_id}
+                                    onValueChange={(value) => {
+                                        setData('account_id', value);
+                                        setData('resident_id', '');
+                                        setData('parent_meter_id', '');
+                                        setData('allocation_percentage', '');
+                                    }}
+                                    disabled={!can.create || processing}
+                                >
+                                    <SelectTrigger className="mt-1">
+                                        <SelectValue placeholder="Select account" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {accounts.map((account) => (
+                                            <SelectItem key={account.id} value={account.id.toString()}>
+                                                {account.name} ({account.account_number})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.account_id && (
+                                    <p className="text-sm text-red-600 mt-1">{errors.account_id}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <Label htmlFor="resident_id">Resident (optional)</Label>
+                                <Select
+                                    value={data.resident_id || 'none'}
+                                    onValueChange={(value) => setData('resident_id', value === 'none' ? '' : value)}
+                                    disabled={!can.create || processing || !data.account_id}
+                                >
+                                    <SelectTrigger className="mt-1">
+                                        <SelectValue placeholder="No resident linked" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No resident linked</SelectItem>
+                                        {availableResidents.map((resident) => (
+                                            <SelectItem key={resident.id} value={resident.id.toString()}>
+                                                {resident.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.resident_id && (
+                                    <p className="text-sm text-red-600 mt-1">{errors.resident_id}</p>
+                                )}
+                            </div>
 
                             {/* Sub-meter Option (for individual meters) */}
                             {data.meter_type === 'individual' && bulkMeters.length > 0 && (
@@ -227,7 +291,8 @@ export default function CreateMeter() {
                                             onCheckedChange={(checked) => {
                                                 setData('is_sub_meter', checked);
                                                 if (!checked) {
-                                                    setData('bulk_meter_id', '');
+                                                    setData('parent_meter_id', '');
+                                                    setData('allocation_percentage', '');
                                                 }
                                             }}
                                             disabled={!can.create || processing}
@@ -235,27 +300,46 @@ export default function CreateMeter() {
                                     </div>
 
                                     {data.is_sub_meter && (
-                                        <div>
-                                            <Label htmlFor="bulk_meter_id">Parent Bulk Meter *</Label>
-                                            <Select
-                                                value={data.bulk_meter_id}
-                                                onValueChange={(value) => setData('bulk_meter_id', value)}
-                                                disabled={!can.create || processing}
-                                            >
-                                                <SelectTrigger className="mt-1">
-                                                    <SelectValue placeholder="Select bulk meter" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {bulkMeters.map((meter) => (
-                                                        <SelectItem key={meter.id} value={meter.id.toString()}>
-                                                            {meter.meter_number} - {meter.meter_name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            {errors.bulk_meter_id && (
-                                                <p className="text-sm text-red-600 mt-1">{errors.bulk_meter_id}</p>
-                                            )}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <Label htmlFor="parent_meter_id">Parent Bulk Meter *</Label>
+                                                <Select
+                                                    value={data.parent_meter_id}
+                                                    onValueChange={(value) => setData('parent_meter_id', value)}
+                                                    disabled={!can.create || processing || !data.account_id}
+                                                >
+                                                    <SelectTrigger className="mt-1">
+                                                        <SelectValue placeholder="Select bulk meter" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availableBulkMeters.map((meter) => (
+                                                            <SelectItem key={meter.id} value={meter.id.toString()}>
+                                                                {meter.meter_number} - {meter.meter_name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                {errors.parent_meter_id && (
+                                                    <p className="text-sm text-red-600 mt-1">{errors.parent_meter_id}</p>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="allocation_percentage">Allocation (%) *</Label>
+                                                <Input
+                                                    id="allocation_percentage"
+                                                    type="number"
+                                                    min="0.01"
+                                                    max="100"
+                                                    step="0.01"
+                                                    value={data.allocation_percentage}
+                                                    onChange={(e) => setData('allocation_percentage', e.target.value)}
+                                                    disabled={!can.create || processing}
+                                                    className="mt-1"
+                                                />
+                                                {errors.allocation_percentage && (
+                                                    <p className="text-sm text-red-600 mt-1">{errors.allocation_percentage}</p>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -312,7 +396,7 @@ export default function CreateMeter() {
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Location */}
                                 <div>
-                                    <Label htmlFor="location">Location</Label>
+                                    <Label htmlFor="location">Location *</Label>
                                     <Input
                                         id="location"
                                         type="text"
@@ -325,6 +409,9 @@ export default function CreateMeter() {
                                     {errors.location && (
                                         <p className="text-sm text-red-600 mt-1">{errors.location}</p>
                                     )}
+                                    {errors.location && (
+                                        <p className="text-sm text-red-600 mt-1">{errors.location}</p>
+                                    )}
                                 </div>
 
                                 {/* Installation Date */}
@@ -333,28 +420,28 @@ export default function CreateMeter() {
                                     <Input
                                         id="installation_date"
                                         type="date"
-                                        value={data.installation_date}
-                                        onChange={(e) => setData('installation_date', e.target.value)}
+                                        value={data.installed_at}
+                                        onChange={(e) => setData('installed_at', e.target.value)}
                                         disabled={!can.create || processing}
                                         className="mt-1"
                                         max={new Date().toISOString().split('T')[0]}
                                     />
-                                    {errors.installation_date && (
-                                        <p className="text-sm text-red-600 mt-1">{errors.installation_date}</p>
+                                    {errors.installed_at && (
+                                        <p className="text-sm text-red-600 mt-1">{errors.installed_at}</p>
                                     )}
                                 </div>
                             </div>
 
                             {/* Notes */}
                             <div>
-                                <Label htmlFor="notes">Notes</Label>
+                                <Label htmlFor="notes">Initial Reading Notes</Label>
                                 <textarea
                                     id="notes"
                                     value={data.notes}
                                     onChange={(e) => setData('notes', e.target.value)}
                                     disabled={!can.create || processing}
                                     className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
-                                    placeholder="Add any additional notes about this meter..."
+                                    placeholder="Add notes about the opening reading..."
                                 />
                                 {errors.notes && (
                                     <p className="text-sm text-red-600 mt-1">{errors.notes}</p>

@@ -102,7 +102,7 @@ class UpdateMeterRequest extends FormRequest
             $meter = $this->route('meter');
 
             // Validate account change
-            if ($this->has('account_id') && $this->account_id !== $meter->account_id) {
+            if ($this->filled('account_id') && (int) $this->account_id !== (int) $meter->account_id) {
                 $this->validateAccountChange($validator, $meter);
             }
 
@@ -255,6 +255,11 @@ class UpdateMeterRequest extends FormRequest
      */
     protected function validateStatusChange($validator, Meter $meter): void
     {
+        if ($meter->status === 'replaced') {
+            $validator->errors()->add('status', 'A replaced meter cannot be reactivated');
+            return;
+        }
+
         // If deactivating a bulk meter
         if ($this->status === 'inactive' && $meter->isBulkMeter()) {
             $activeSubMeters = $meter->subMeters()->active()->count();

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Account;
 use App\Models\Meter;
+use App\Models\Resident;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -38,7 +39,7 @@ class StoreMeterRequest extends FormRequest
                 'exists:accounts,id',
             ],
             'resident_id' => [
-                'required',
+                'nullable',
                 'integer',
                 'exists:residents,id',
             ],
@@ -53,9 +54,14 @@ class StoreMeterRequest extends FormRequest
                 'string',
                 'max:100',
             ],
+            'location' => [
+                'required',
+                'string',
+                'max:255',
+            ],
             'type' => [
                 'required',
-                Rule::in(['analogue', 'digital']),
+                Rule::in(['water', 'sewer']),
             ],
             'meter_type' => [
                 'required',
@@ -65,14 +71,14 @@ class StoreMeterRequest extends FormRequest
                 'nullable',
                 'integer',
                 'exists:meters,id',
-                'different:id', // Cannot be parent of itself
+                'different:id',
             ],
             'allocation_percentage' => [
                 'nullable',
                 'numeric',
                 'min:0.01',
                 'max:100',
-                'required_if:parent_meter_id,!=,null',
+                'required_with:parent_meter_id',
             ],
             'status' => [
                 'required',
@@ -82,6 +88,17 @@ class StoreMeterRequest extends FormRequest
                 'nullable',
                 'date',
                 'before_or_equal:today',
+            ],
+            'initial_reading' => [
+                'required',
+                'numeric',
+                'min:0',
+                'max:999999',
+            ],
+            'notes' => [
+                'nullable',
+                'string',
+                'max:1000',
             ],
         ];
     }
@@ -98,6 +115,16 @@ class StoreMeterRequest extends FormRequest
                 
                 if (!$account || !$account->isActive()) {
                     $validator->errors()->add('account_id', 'Account must be active to add meters');
+                }
+
+                if ($this->resident_id) {
+                    $resident = Resident::find($this->resident_id);
+
+                    if ($resident && !$resident->status) {
+                        $validator->errors()->add('resident_id', 'Resident must be active');
+                    } elseif ($resident && $resident->account_number !== $account?->account_number) {
+                        $validator->errors()->add('resident_id', 'Resident must belong to the selected account');
+                    }
                 }
             }
 
@@ -173,12 +200,14 @@ class StoreMeterRequest extends FormRequest
             'meter_number.required' => 'Meter number is required',
             'meter_number.unique' => 'This meter number is already in use',
             'meter_name.required' => 'Meter name is required',
-            'type.required' => 'Please select meter type (water/sewer)',
+            'location.required' => 'Meter location is required',
+            'type.required' => 'Please select a service (water/sewer)',
             'meter_type.required' => 'Please specify if this is an individual or bulk meter',
-            'allocation_percentage.required_if' => 'Allocation percentage is required for sub-meters',
+            'allocation_percentage.required_with' => 'Allocation percentage is required for sub-meters',
             'allocation_percentage.min' => 'Allocation must be at least 0.01%',
             'allocation_percentage.max' => 'Allocation cannot exceed 100%',
             'installed_at.before_or_equal' => 'Installation date cannot be in the future',
+            'initial_reading.required' => 'An initial meter reading is required',
         ];
     }
 

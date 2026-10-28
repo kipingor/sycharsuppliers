@@ -3,16 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreMeterRequest;
+use App\Http\Requests\ReplaceMeterRequest;
 use App\Http\Requests\UpdateMeterRequest;
 use App\Models\Meter;
+use App\Models\MeterReading;
 use App\Models\Account;
+use App\Models\Resident;
 use App\Services\Billing\BulkMeterService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 /**
@@ -94,9 +99,13 @@ class MeterController extends Controller
             'accounts' => Account::active()
                 ->select('id', 'name', 'account_number')
                 ->get(),
+            'residents' => Resident::where('status', true)
+                ->whereNull('deleted_at')
+                ->select('id', 'name', 'account_number')
+                ->get(),
             'bulkMeters' => Meter::where('meter_type', 'bulk')
                 ->where('status', 'active')
-                ->select('id', 'meter_number', 'meter_name')
+                ->select('id', 'account_id', 'meter_number', 'meter_name')
                 ->get(),
             'can' => [
                 'create' => Auth::user()->can('create', Meter::class),
@@ -109,9 +118,26 @@ class MeterController extends Controller
      */
     public function store(StoreMeterRequest $request): RedirectResponse
     {
-        $meter = Meter::create($request->validated());
+        $data = $request->validated();
+        $initialReading = $data['initial_reading'];
+        $readingNotes = $data['notes'] ?? null;
+        unset($data['initial_reading'], $data['notes']);
 
-        // If this is a sub-meter, validate parent allocation
+        $meter = DB::transaction(function () use ($data, $initialReading, $readingNotes) {
+            $meter = Meter::create($data);
+
+            MeterReading::create([
+                'meter_id' => $meter->id,
+                'reading_value' => $initialReading,
+                'reading_date' => today()->toDateString(),
+                'reading_type' => 'actual',
+                'consumption' => 0,
+                'notes' => $readingNotes,
+            ]);
+
+            return $meter;
+        });
+
         if ($meter->parent_meter_id) {
             $validation = $this->bulkMeterService->validateBulkMeterSetup($meter->parentMeter);
 
@@ -127,6 +153,106 @@ class MeterController extends Controller
             ->with('success', 'Meter created successfully');
     }
 
+    public function replacementForm(Meter $meter): Response|RedirectResponse
+    {
+        $this->authorize('update', $meter);
+
+        if (!$meter->isFaulty() || $meter->replaced_by_meter_id) {
+            return redirect()->route('meters.show', $meter)
+                ->with('error', 'Only faulty meters that have not already been replaced can be replaced');
+        }
+
+        $meter->load('account');
+
+        return Inertia::render('meters/replace', [
+            'meter' => [
+                'id' => $meter->id,
+                'meter_number' => $meter->meter_number,
+                'meter_name' => $meter->meter_name,
+                'meter_type' => $meter->meter_type,
+                'type' => $meter->type,
+                'status' => $meter->status,
+                'location' => $meter->location,
+                'account' => $meter->account,
+                'current_reading' => $meter->getLatestReadingValue(),
+            ],
+        ]);
+    }
+
+    public function replace(ReplaceMeterRequest $request, Meter $meter): RedirectResponse
+    {
+        $data = $request->validated();
+
+        $replacement = DB::transaction(function () use ($data, $meter) {
+            $meter = Meter::query()->lockForUpdate()->findOrFail($meter->id);
+
+            if (!$meter->isFaulty() || $meter->replaced_by_meter_id) {
+                throw ValidationException::withMessages([
+                    'meter' => 'This meter is no longer available for replacement',
+                ]);
+            }
+
+            $latestReading = $meter->readings()->latest('reading_date')->first();
+            $todayReading = $meter->readings()
+                ->whereDate('reading_date', today())
+                ->latest('created_at')
+                ->first();
+
+            $replacement = Meter::create([
+                'account_id' => $meter->account_id,
+                'resident_id' => $meter->resident_id,
+                'meter_number' => $data['meter_number'],
+                'meter_name' => $data['meter_name'],
+                'location' => $data['location'],
+                'type' => $meter->type,
+                'meter_type' => $meter->meter_type,
+                'parent_meter_id' => $meter->parent_meter_id,
+                'allocation_percentage' => $meter->allocation_percentage,
+                'status' => 'active',
+                'installed_at' => today(),
+            ]);
+
+            if (!$todayReading) {
+                $finalReading = (float) $data['final_reading'];
+                $previousValue = $latestReading ? (float) $latestReading->reading_value : $finalReading;
+
+                MeterReading::create([
+                    'meter_id' => $meter->id,
+                    'reading_value' => $finalReading,
+                    'reading_date' => today()->toDateString(),
+                    'reading_type' => 'actual',
+                    'consumption' => max(0, $finalReading - $previousValue),
+                    'notes' => $data['notes'] ?? null,
+                ]);
+            }
+
+            MeterReading::create([
+                'meter_id' => $replacement->id,
+                'reading_value' => $data['initial_reading'],
+                'reading_date' => today()->toDateString(),
+                'reading_type' => 'actual',
+                'consumption' => 0,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            $meter->update([
+                'status' => 'replaced',
+                'replaced_by_meter_id' => $replacement->id,
+            ]);
+
+            if ($meter->isBulkMeter()) {
+                $meter->subMeters()->get()->each(
+                    fn (Meter $subMeter) => $subMeter->update(['parent_meter_id' => $replacement->id])
+                );
+            }
+
+            return $replacement;
+        });
+
+        return redirect()->route('meters.show', $replacement)
+            ->with('success', 'Meter replaced successfully. Existing readings and bills were preserved.');
+    }
+
     /**
      * Display the specified meter
      */
@@ -138,6 +264,7 @@ class MeterController extends Controller
             'account',
             'parentMeter',
             'subMeters.account',
+            'replacementMeter',
             'readings' => function ($query) {
                 $query->latest('reading_date')->limit(10);
             },
@@ -215,6 +342,12 @@ class MeterController extends Controller
                 'account' => $meter->account,
                 'parent_meter' => $meter->parentMeter,
                 'sub_meters' => $meter->subMeters,
+                'replacement_meter' => $meter->replacementMeter
+                    ? [
+                        'id' => $meter->replacementMeter->id,
+                        'meter_number' => $meter->replacementMeter->meter_number,
+                    ]
+                    : null,
                 'summary' => $meter->getSummary(),
             ],
             'readings' => $readings,
