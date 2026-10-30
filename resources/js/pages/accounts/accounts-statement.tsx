@@ -95,8 +95,6 @@ export default function AccountStatementPage() {
         );
     };
 
-    const openingRunning = statement.opening_balance;
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Account Statement — ${account.name}`} />
@@ -207,7 +205,11 @@ export default function AccountStatementPage() {
                                 {formatCurrency(statement.closing_balance)}
                             </p>
                             <p className="text-xs text-muted-foreground mt-1">
-                                {statement.closing_balance <= 0 ? '✓ Fully settled' : 'Amount outstanding'}
+                                {statement.closing_balance > 0
+                                    ? 'Amount outstanding'
+                                    : statement.closing_balance < 0
+                                      ? 'Account credit'
+                                      : '✓ Fully settled'}
                             </p>
                         </CardContent>
                     </Card>
@@ -253,7 +255,7 @@ export default function AccountStatementPage() {
                                     </TableRow>
                                 ) : (
                                     statement.transactions.map((t, i) => {
-                                        const runningTotal = openingRunning + t.running_balance;
+                                        const runningTotal = t.running_balance;
                                         return (
                                             <TableRow key={i}>
                                                 <TableCell className="font-mono text-sm whitespace-nowrap">{t.date}</TableCell>

@@ -12,7 +12,8 @@ class ApplyPaymentService
 {
     public function __construct(
         protected BalanceResolver $balanceResolver
-    ) {}
+    ) {
+    }
 
     /**
      * Apply a payment to an account.
@@ -46,8 +47,10 @@ class ApplyPaymentService
                 'status' => 'completed',
             ]);
 
+            $account->refresh();
+            
             // Recalculate account balance
-            $newBalance = $this->balanceResolver->resolve($accountId);
+            $newBalance = $this->balanceResolver->getAccountBalance($account);
 
             // Dispatch event
             event(new PaymentApplied($payment, $account, $newBalance));
