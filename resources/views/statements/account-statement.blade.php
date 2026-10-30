@@ -183,8 +183,14 @@
                     <div class="kpi-value-red">{{ number_format($closing_balance, 2) }}</div>
                     <div class="kpi-sub">Amount owed</div>
                 @else
-                    <div class="kpi-value-green">0.00</div>
-                    <div class="kpi-sub">Fully settled</div>
+                    <div class="kpi-value-green">{{ number_format($closing_balance, 2) }}</div>
+                    <div class="kpi-sub">
+                        @if($closing_balance < 0)
+                            Account credit
+                        @else
+                            Fully settled
+                        @endif
+                    </div>
                 @endif
             </td>
         </tr>
@@ -241,8 +247,8 @@
                             &mdash;
                         @endif
                     </td>
-                    <td class="r {{ ($opening_balance + $t['running_balance']) > 0 ? 'bal-positive' : 'bal-zero' }}">
-                        {{ number_format($opening_balance + $t['running_balance'], 2) }}
+                    <td class="r {{ $t['running_balance'] > 0 ? 'bal-positive' : 'bal-zero' }}">
+                        {{ number_format($t['running_balance'], 2) }}
                     </td>
                 </tr>
             @empty

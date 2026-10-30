@@ -4,8 +4,8 @@ namespace App\Services\Billing;
 
 use App\Models\Account;
 use App\Models\Billing;
+use App\Models\CreditNote;
 use App\Models\Payment;
-use App\Models\PaymentAllocation;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Config;
@@ -14,10 +14,12 @@ class AccountStatementGenerator
 {
     public function buildData(Account $account, string $startDate, string $endDate): array
     {
+        $periodStart = Carbon::parse($startDate)->startOfDay();
+        $periodEnd = Carbon::parse($endDate)->endOfDay();
+
         // ── 1. Billings in period ─────────────────────────────────────────
-        $billings = Billing::with(['creditNotes'])
-            ->where('account_id', $account->id)
-            ->whereBetween('issued_at', [$startDate, $endDate . ' 23:59:59'])
+        $billings = Billing::where('account_id', $account->id)
+            ->whereBetween('issued_at', [$periodStart, $periodEnd])
             ->whereNotIn('status', ['voided'])
             ->orderBy('issued_at')
             ->get();
@@ -27,44 +29,44 @@ class AccountStatementGenerator
         // They may later be allocated to bills via payment_allocations, but
         // we show them by their actual payment_date regardless.
         $payments = Payment::where('account_id', $account->id)
-            ->whereBetween('payment_date', [$startDate, $endDate . ' 23:59:59'])
+            ->whereBetween('payment_date', [$periodStart, $periodEnd])
             ->whereNull('deleted_at')
             ->orderBy('payment_date')
             ->get();
 
-        // ── 3. Check if allocations exist (reconciled accounts) ───────────
-        $billingIds  = $billings->pluck('id');
-        $paymentIds  = $payments->pluck('id');
-        $allocations = PaymentAllocation::whereIn('billing_id', $billingIds)
-            ->orWhereIn('payment_id', $paymentIds)
-            ->get()
-            ->groupBy('payment_id');  // keyed by payment_id for quick lookup
+        // ── 3. Credit notes in period ─────────────────────────────────────
+        $creditNotesQuery = CreditNote::query()
+            ->where('status', 'applied')
+            ->whereHas('billing', fn ($query) => $query
+                ->where('account_id', $account->id)
+                ->whereNotIn('status', ['voided']));
+        $creditNotes = (clone $creditNotesQuery)
+            ->whereBetween('created_at', [$periodStart, $periodEnd])
+            ->orderBy('created_at')
+            ->get();
 
         // ── 4. Opening balance ────────────────────────────────────────────
         // Must be calculated BEFORE the running-balance loop so the ledger
         // starts from the correct carried-forward position.
         //
-        // Formula: prior billed (non-voided) - prior paid - prior credits
+        // Formula: prior billed (non-voided) - prior paid - prior applied credits
         // NOTE: result is intentionally allowed to be negative — a negative
         // opening balance means the account was in credit before this period
         // (i.e. they had overpaid). Clamping to 0 with max() would silently
         // discard that credit and was the previous bug.
         $priorBilled = (float) Billing::where('account_id', $account->id)
-            ->where('issued_at', '<', $startDate)
+            ->where('issued_at', '<', $periodStart)
             ->whereNotIn('status', ['voided'])
             ->sum('total_amount');
 
         $priorPaid = (float) Payment::where('account_id', $account->id)
-            ->where('payment_date', '<', $startDate)
+            ->where('payment_date', '<', $periodStart)
             ->whereNull('deleted_at')
             ->sum('amount');
 
-        $priorCredited = (float) Billing::with('creditNotes')
-            ->where('account_id', $account->id)
-            ->where('issued_at', '<', $startDate)
-            ->whereNotIn('status', ['voided'])
-            ->get()
-            ->sum(fn ($b) => $b->creditNotes->where('status', 'applied')->sum('amount'));
+        $priorCredited = (float) (clone $creditNotesQuery)
+            ->where('created_at', '<', $periodStart)
+            ->sum('amount');
 
         // Negative = account was in credit; positive = amount owed from before period
         $openingBalance = round($priorBilled - $priorPaid - $priorCredited, 2);
@@ -84,20 +86,21 @@ class AccountStatementGenerator
                 'credit'          => null,
                 'running_balance' => 0,
             ]);
+        }
 
-            // Credit notes against this bill
-            foreach ($bill->creditNotes->where('status', 'applied') as $cn) {
-                $transactions->push([
-                    'date'            => Carbon::parse($cn->created_at)->format('d M Y'),
-                    'sort_date'       => $cn->created_at,
-                    'type'            => 'credit_note',
-                    'reference'       => $cn->reference,
-                    'description'     => $cn->typeLabel() . ': ' . $cn->reason,
-                    'debit'           => null,
-                    'credit'          => (float) $cn->amount,
-                    'running_balance' => 0,
-                ]);
-            }
+        // Credit rows are dated when the credit note is applied, regardless
+        // of when the bill it adjusts was issued.
+        foreach ($creditNotes as $creditNote) {
+            $transactions->push([
+                'date'            => Carbon::parse($creditNote->created_at)->format('d M Y'),
+                'sort_date'       => $creditNote->created_at,
+                'type'            => 'credit_note',
+                'reference'       => $creditNote->reference,
+                'description'     => $creditNote->typeLabel() . ': ' . $creditNote->reason,
+                'debit'           => null,
+                'credit'          => (float) $creditNote->amount,
+                'running_balance' => 0,
+            ]);
         }
 
         // Credit rows — one per payment
@@ -131,9 +134,7 @@ class AccountStatementGenerator
         // ── 6. Totals ─────────────────────────────────────────────────────
         $totalBilled   = (float) $billings->sum('total_amount');
         $totalPaid     = (float) $payments->sum('amount');
-        $totalCredited = (float) $billings->sum(
-            fn ($b) => $b->creditNotes->where('status', 'applied')->sum('amount')
-        );
+        $totalCredited = (float) $creditNotes->sum('amount');
 
         // Closing balance = opening + current period activity.
         // Negative closing balance means account is in credit after this period.

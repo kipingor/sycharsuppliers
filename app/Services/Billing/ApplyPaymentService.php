@@ -47,7 +47,7 @@ class ApplyPaymentService
             ]);
 
             // Recalculate account balance
-            $newBalance = $this->balanceResolver->resolve($accountId);
+            $newBalance = $this->balanceResolver->getAccountBalance($account);
 
             // Dispatch event
             event(new PaymentApplied($payment, $account, $newBalance));
