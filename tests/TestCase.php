@@ -4,8 +4,10 @@ namespace Tests;
 
 use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
-use Spatie\Permission\PermissionRegistrar;
+use Illuminate\Support\Facades\Schema;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -13,7 +15,7 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
-        if (RefreshDatabaseState::$migrated) {
+        if (RefreshDatabaseState::$migrated && Schema::hasTable('permissions')) {
             $this->seedTestPermissions();
         }
     }
@@ -38,6 +40,10 @@ abstract class TestCase extends BaseTestCase
             'manage-meters',
         ] as $permission) {
             Permission::findOrCreate($permission, 'web');
+        }
+
+        foreach (['admin', 'accountant', 'field_officer'] as $roleName) {
+            Role::findOrCreate($roleName, 'web');
         }
     }
 }

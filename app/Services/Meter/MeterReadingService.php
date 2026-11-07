@@ -8,6 +8,7 @@ use App\Services\Audit\AuditService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Auth;
@@ -422,10 +423,18 @@ class MeterReadingService
      */
     public function hasBeenBilled(MeterReading $reading): bool
     {
-        return DB::table('billing_details')
+        $query = DB::table('billing_details')
             ->where('meter_id', $reading->meter_id)
-            ->where('reading_date', $reading->reading_date)
-            ->exists();
+            ->where(function ($q) use ($reading) {
+                $q->where('current_reading_value', $reading->reading)
+                  ->orWhere('previous_reading_value', $reading->reading);
+
+                if (Schema::hasColumn('billing_details', 'reading_date')) {
+                    $q->orWhere('reading_date', $reading->reading_date);
+                }
+            });
+
+        return $query->exists();
     }
 
     /**
@@ -437,6 +446,7 @@ class MeterReadingService
     protected function hasDependentReadings(MeterReading $reading): bool
     {
         return MeterReading::where('meter_id', $reading->meter_id)
+            ->whereKeyNot($reading->id)
             ->where('reading_date', '>', $reading->reading_date)
             ->exists();
     }

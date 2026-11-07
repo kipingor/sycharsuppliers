@@ -20,7 +20,7 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response
     {
-        if (!env('ALLOW_REGISTRATION')) {
+        if (! filter_var(env('ALLOW_REGISTRATION', true), FILTER_VALIDATE_BOOLEAN)) {
             abort(403, 'User registration is disabled.');
         }
         return Inertia::render('auth/register');
@@ -33,7 +33,7 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        if (!env('ALLOW_REGISTRATION')) {
+        if (! filter_var(env('ALLOW_REGISTRATION', true), FILTER_VALIDATE_BOOLEAN)) {
             abort(403, 'User registration is disabled.');
         }
         $request->validate([

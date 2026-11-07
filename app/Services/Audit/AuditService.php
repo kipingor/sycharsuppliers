@@ -137,6 +137,7 @@ class AuditService
                 'reading_date' => $reading->reading_date?->toDateString(),
                 'reading_type' => $reading->reading_type,
                 'consumption' => $reading->consumption,
+                'previous_reading_value' => $context['previous_reading'] ?? $context['previous_reading_value'] ?? null,
                 'account_id' => $reading->meter?->account_id,
                 'action_type' => 'meter_reading',
             ], $context)
@@ -503,7 +504,7 @@ class AuditService
             'actions_by_event' => $audits->groupBy('event')->map->count()->toArray(),
             'unique_meters_affected' => $audits->pluck('new_values')
                 ->map(function ($values) {
-                    $decoded = json_decode($values, true);
+                    $decoded = is_array($values) ? $values : (is_string($values) ? json_decode($values, true) ?? [] : []);
                     return $decoded['meter_id'] ?? null;
                 })
                 ->filter()
@@ -511,7 +512,7 @@ class AuditService
                 ->count(),
             'readings_by_type' => $audits->pluck('new_values')
                 ->map(function ($values) {
-                    $decoded = json_decode($values, true);
+                    $decoded = is_array($values) ? $values : (is_string($values) ? json_decode($values, true) ?? [] : []);
                     return $decoded['reading_type'] ?? null;
                 })
                 ->filter()
@@ -624,8 +625,7 @@ class AuditService
             context: $summaryContext
         );
 
-        // Log individual readings
-        return $this->bulkLogAction('created', $readings, $context);
+        return 1;
     }
 
     /**

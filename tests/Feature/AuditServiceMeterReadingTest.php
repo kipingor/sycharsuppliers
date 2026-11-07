@@ -24,6 +24,15 @@ class AuditServiceMeterReadingTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function decodeAuditValues(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        return is_string($value) ? json_decode($value, true) ?? [] : [];
+    }
+
     protected AuditService $auditService;
     protected MeterReadingService $meterReadingService;
     protected User $user;
@@ -51,12 +60,37 @@ class AuditServiceMeterReadingTest extends TestCase
         ]);
     }
 
+    protected function seedBilledReading(MeterReading $reading): void
+    {
+        $billingId = DB::table('billings')->insertGetId([
+            'meter_id' => $this->meter->id,
+            'amount_due' => 1500,
+            'status' => 'paid',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('billing_details')->insert([
+            'billing_id' => $billingId,
+            'meter_id' => $this->meter->id,
+            'reading_date' => $reading->reading_date,
+            'previous_reading_value' => 0,
+            'current_reading_value' => 50,
+            'units_used' => 50,
+            'consumption' => 50,
+            'rate' => 300,
+            'amount' => 1500,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     /** @test */
     public function it_logs_meter_reading_creation()
     {
         $reading = $this->meterReadingService->createReading([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now(),
             'reading_type' => 'actual',
         ]);
@@ -69,9 +103,9 @@ class AuditServiceMeterReadingTest extends TestCase
         $this->assertNotNull($audit);
         $this->assertEquals($this->user->id, $audit->user_id);
         
-        $newValues = json_decode($audit->new_values, true);
+        $newValues = $this->decodeAuditValues($audit->new_values);
         $this->assertEquals($this->meter->id, $newValues['meter_id']);
-        $this->assertEquals(1000, $newValues['reading_value']);
+        $this->assertEquals(50, $newValues['reading_value']);
         $this->assertEquals('actual', $newValues['reading_type']);
         $this->assertEquals('meter_reading', $newValues['action_type']);
     }
@@ -81,7 +115,7 @@ class AuditServiceMeterReadingTest extends TestCase
     {
         $reading = MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now(),
         ]);
 
@@ -97,7 +131,7 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($audit);
         
-        $newValues = json_decode($audit->new_values, true);
+        $newValues = $this->decodeAuditValues($audit->new_values);
         $this->assertArrayHasKey('old_values', $newValues);
         $this->assertArrayHasKey('new_values', $newValues);
         $this->assertEquals('Updated reading notes', $newValues['new_values']['notes']);
@@ -108,7 +142,7 @@ class AuditServiceMeterReadingTest extends TestCase
     {
         $reading = MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now(),
         ]);
 
@@ -122,9 +156,9 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($audit);
         
-        $newValues = json_decode($audit->new_values, true);
+        $newValues = $this->decodeAuditValues($audit->new_values);
         $this->assertArrayHasKey('deleted_reading_data', $newValues);
-        $this->assertEquals(1000, $newValues['deleted_reading_data']['reading_value']);
+        $this->assertEquals(50, $newValues['deleted_reading_data']['reading_value']);
     }
 
     /** @test */
@@ -133,7 +167,7 @@ class AuditServiceMeterReadingTest extends TestCase
         // Create previous reading
         MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->subMonth(),
         ]);
 
@@ -141,7 +175,7 @@ class AuditServiceMeterReadingTest extends TestCase
         try {
             $this->meterReadingService->createReading([
                 'meter_id' => $this->meter->id,
-                'reading_value' => 500, // Less than previous
+                'reading_value' => 25, // Less than previous
                 'reading_date' => Carbon::now(),
                 'reading_type' => 'actual',
             ]);
@@ -155,10 +189,10 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($audit);
         
-        $newValues = json_decode($audit->new_values, true);
-        $this->assertEquals(1000, $newValues['previous_reading_value']);
-        $this->assertEquals(500, $newValues['attempted_reading_value']);
-        $this->assertEquals(500, $newValues['violation_amount']); // 1000 - 500
+        $newValues = $this->decodeAuditValues($audit->new_values);
+        $this->assertEquals(50, $newValues['previous_reading_value']);
+        $this->assertEquals(25, $newValues['attempted_reading_value']);
+        $this->assertEquals(25, $newValues['violation_amount']); // 50 - 25
     }
 
     /** @test */
@@ -167,7 +201,7 @@ class AuditServiceMeterReadingTest extends TestCase
         // Create existing reading for current month
         MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->startOfMonth(),
         ]);
 
@@ -175,7 +209,7 @@ class AuditServiceMeterReadingTest extends TestCase
         try {
             $this->meterReadingService->createReading([
                 'meter_id' => $this->meter->id,
-                'reading_value' => 1100,
+                'reading_value' => 55,
                 'reading_date' => Carbon::now()->endOfMonth(),
                 'reading_type' => 'actual',
             ]);
@@ -189,7 +223,7 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($audit);
         
-        $newValues = json_decode($audit->new_values, true);
+        $newValues = $this->decodeAuditValues($audit->new_values);
         $this->assertArrayHasKey('existing_reading_id', $newValues);
         $this->assertArrayHasKey('existing_reading_date', $newValues);
     }
@@ -199,27 +233,16 @@ class AuditServiceMeterReadingTest extends TestCase
     {
         $reading = MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->subMonth(),
         ]);
 
         // Simulate reading being used in billing
-        DB::table('billing_details')->insert([
-            'billing_id' => 1,
-            'meter_id' => $this->meter->id,
-            'reading_date' => $reading->reading_date,
-            'previous_reading_value' => 0,
-            'current_reading_value' => 1000,
-            'consumption' => 1000,
-            'rate' => 300,
-            'amount' => 1500,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->seedBilledReading($reading);
 
         try {
             $this->meterReadingService->updateReading($reading, [
-                'reading_value' => 1100,
+                'reading_value' => 55,
             ]);
         } catch (\Exception $e) {
             // Expected to fail
@@ -232,7 +255,7 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($audit);
         
-        $newValues = json_decode($audit->new_values, true);
+        $newValues = $this->decodeAuditValues($audit->new_values);
         $this->assertEquals('reading_already_billed', $newValues['reason']);
         $this->assertArrayHasKey('attempted_changes', $newValues);
     }
@@ -242,23 +265,12 @@ class AuditServiceMeterReadingTest extends TestCase
     {
         $reading = MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->subMonth(),
         ]);
 
         // Simulate reading being used in billing
-        DB::table('billing_details')->insert([
-            'billing_id' => 1,
-            'meter_id' => $this->meter->id,
-            'reading_date' => $reading->reading_date,
-            'previous_reading_value' => 0,
-            'current_reading_value' => 1000,
-            'consumption' => 1000,
-            'rate' => 300,
-            'amount' => 1500,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->seedBilledReading($reading);
 
         try {
             $this->meterReadingService->deleteReading($reading);
@@ -273,7 +285,7 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($audit);
         
-        $newValues = json_decode($audit->new_values, true);
+        $newValues = $this->decodeAuditValues($audit->new_values);
         $this->assertEquals('reading_already_billed', $newValues['reason']);
     }
 
@@ -283,19 +295,19 @@ class AuditServiceMeterReadingTest extends TestCase
         $readingsData = [
             [
                 'meter_id' => $this->meter->id,
-                'reading_value' => 1000,
+                'reading_value' => 50,
                 'reading_date' => Carbon::now()->subMonths(2),
                 'reading_type' => 'actual',
             ],
             [
                 'meter_id' => $this->meter->id,
-                'reading_value' => 1100,
+                'reading_value' => 55,
                 'reading_date' => Carbon::now()->subMonth(),
                 'reading_type' => 'actual',
             ],
             [
                 'meter_id' => $this->meter->id,
-                'reading_value' => 1200,
+                'reading_value' => 60,
                 'reading_date' => Carbon::now(),
                 'reading_type' => 'actual',
             ],
@@ -313,7 +325,7 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($bulkAudit);
         
-        $newValues = json_decode($bulkAudit->new_values, true);
+        $newValues = $this->decodeAuditValues($bulkAudit->new_values);
         $this->assertEquals(3, $newValues['total_readings']);
         $this->assertEquals(3, $newValues['total_attempted']);
         $this->assertEquals(3, $newValues['total_created']);
@@ -334,20 +346,20 @@ class AuditServiceMeterReadingTest extends TestCase
         // Create a reading first
         MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->subMonth(),
         ]);
 
         $readingsData = [
             [
                 'meter_id' => $this->meter->id,
-                'reading_value' => 1100,
+                'reading_value' => 55,
                 'reading_date' => Carbon::now(),
                 'reading_type' => 'actual',
             ],
             [
                 'meter_id' => $this->meter->id,
-                'reading_value' => 500, // Violates monotonic constraint
+                'reading_value' => 25, // Violates monotonic constraint
                 'reading_date' => Carbon::now()->addMonth(),
                 'reading_type' => 'actual',
             ],
@@ -365,7 +377,7 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $this->assertNotNull($failureAudit);
         
-        $newValues = json_decode($failureAudit->new_values, true);
+        $newValues = $this->decodeAuditValues($failureAudit->new_values);
         $this->assertArrayHasKey('error', $newValues);
         $this->assertTrue($newValues['bulk_operation']);
     }
@@ -376,13 +388,13 @@ class AuditServiceMeterReadingTest extends TestCase
         // Create readings
         $reading1 = MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->subMonth(),
         ]);
 
         $reading2 = MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1100,
+            'reading_value' => 55,
             'reading_date' => Carbon::now(),
         ]);
 
@@ -410,7 +422,7 @@ class AuditServiceMeterReadingTest extends TestCase
         // Create readings
         $reading = MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now(),
         ]);
 
@@ -433,7 +445,7 @@ class AuditServiceMeterReadingTest extends TestCase
         for ($i = 0; $i < 5; $i++) {
             $reading = MeterReading::factory()->create([
                 'meter_id' => $this->meter->id,
-                'reading_value' => 1000 + ($i * 100),
+                'reading_value' => 50 + ($i * 5),
                 'reading_date' => Carbon::now()->subMonths(5 - $i),
                 'reading_type' => $i % 2 == 0 ? 'actual' : 'estimated',
             ]);
@@ -459,7 +471,7 @@ class AuditServiceMeterReadingTest extends TestCase
         // Create a reading
         MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->subMonth(),
         ]);
 
@@ -467,7 +479,7 @@ class AuditServiceMeterReadingTest extends TestCase
         try {
             $this->meterReadingService->createReading([
                 'meter_id' => $this->meter->id,
-                'reading_value' => 500,
+                'reading_value' => 25,
                 'reading_date' => Carbon::now(),
                 'reading_type' => 'actual',
             ]);
@@ -477,7 +489,7 @@ class AuditServiceMeterReadingTest extends TestCase
         try {
             MeterReading::factory()->create([
                 'meter_id' => $this->meter->id,
-                'reading_value' => 1100,
+                'reading_value' => 55,
                 'reading_date' => Carbon::now()->subMonth()->addDay(),
             ]);
         } catch (\Exception $e) {}
@@ -500,7 +512,7 @@ class AuditServiceMeterReadingTest extends TestCase
 
         $reading = $this->meterReadingService->createReading([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now(),
             'reading_type' => 'actual',
         ]);
@@ -519,14 +531,14 @@ class AuditServiceMeterReadingTest extends TestCase
         // Create previous reading
         MeterReading::factory()->create([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1000,
+            'reading_value' => 50,
             'reading_date' => Carbon::now()->subMonth(),
         ]);
 
         // Create new reading
         $reading = $this->meterReadingService->createReading([
             'meter_id' => $this->meter->id,
-            'reading_value' => 1250,
+            'reading_value' => 65,
             'reading_date' => Carbon::now(),
             'reading_type' => 'actual',
         ]);
@@ -536,9 +548,9 @@ class AuditServiceMeterReadingTest extends TestCase
             ->where('event', 'created')
             ->first();
 
-        $newValues = json_decode($audit->new_values, true);
-        $this->assertEquals(1000, $newValues['previous_reading_value']);
-        $this->assertEquals(250, $newValues['consumption_calculated']);
+        $newValues = $this->decodeAuditValues($audit->new_values);
+        $this->assertEquals(50, $newValues['previous_reading_value']);
+        $this->assertEquals(15, $newValues['consumption_calculated']);
         $this->assertTrue($newValues['validation_passed']);
     }
 }
