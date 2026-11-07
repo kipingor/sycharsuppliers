@@ -22,8 +22,8 @@ class MeterReadingFactory extends Factory
             'meter_id' => Meter::factory(),
             'reading_date' => $this->faker->date(),
             'reading_value' => $this->faker->randomFloat(2, 0, 10000),
-            'employee_id' => Employee::factory(),
-            'reading_type' => $this->faker->randomElement(['manual', 'automatic']),            
+            'reader_id' => \App\Models\User::factory(),
+            'reading_type' => $this->faker->randomElement(['manual', 'automatic']),
         ];
     }
 }
