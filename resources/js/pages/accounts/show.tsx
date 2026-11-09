@@ -54,7 +54,8 @@ interface Account {
 interface ShowAccountProps {
     account: Account;
     balance: number;
-    can: { update: boolean; delete: boolean };
+    overdueAmount: number;
+    can: { update: boolean; delete: boolean; sendEmail: boolean };
 }
 
 const statusBadge: Record<string, string> = {
@@ -70,7 +71,7 @@ const statusBadge: Record<string, string> = {
 };
 
 export default function ShowAccount() {
-    const { account, balance, can } = usePage<SharedData & ShowAccountProps>().props;
+    const { account, balance, overdueAmount, can } = usePage<SharedData & ShowAccountProps>().props;
     const [activeTab, setActiveTab] = useState('meters');
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -119,6 +120,18 @@ export default function ShowAccount() {
                         )}
                     </div>
                     <div className="flex items-center gap-2">
+                        {can.sendEmail && overdueAmount > 0 && account.email && (
+                            <Link
+                                href={route('emails.compose', {
+                                    account_id: account.id,
+                                    mode: 'overdue_reminder_individual',
+                                })}
+                            >
+                                <Button variant="outline" size="sm">
+                                    <Mail size={16} className="mr-2" /> Send Overdue Statement
+                                </Button>
+                            </Link>
+                        )}
                         <Link href={route('accounts.statement', account.id)}>
                             <Button variant="outline" size="sm">
                                 <FileText size={16} className="mr-2" /> Statement

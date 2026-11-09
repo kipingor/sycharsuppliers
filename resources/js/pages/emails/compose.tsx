@@ -30,6 +30,7 @@ interface ComposeProps {
     accounts: AccountOption[];
     preAccount?: AccountOption | null;
     replyTo?: ReplyTo | null;
+    initialMode: 'single' | 'overdue_reminder_individual';
     overdueAccountsCount: number;
     activeAccountsCount: number;
 }
@@ -62,10 +63,10 @@ const announcementTemplates = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ComposeEmail() {
-    const { accounts, preAccount, replyTo, overdueAccountsCount, activeAccountsCount } = usePage<SharedData & ComposeProps>().props;
+    const { accounts, preAccount, replyTo, initialMode, overdueAccountsCount, activeAccountsCount } = usePage<SharedData & ComposeProps>().props;
 
     const isReply = !!replyTo;
-    const [mode, setMode] = useState<'single' | 'overdue_reminder' | 'announcement'>('single');
+    const [mode, setMode] = useState<'single' | 'overdue_reminder' | 'overdue_reminder_individual' | 'announcement'>(initialMode);
     const [announcementTemplate, setAnnouncementTemplate] = useState<keyof typeof announcementTemplates>('pump_repair');
 
     const breadcrumbs: BreadcrumbItem[] = [
@@ -75,21 +76,27 @@ export default function ComposeEmail() {
 
     const { data, setData, post, processing, errors } = useForm({
         to: isReply ? replyTo!.from_email : preAccount?.email || '',
-        subject: isReply ? (replyTo!.subject.startsWith('Re: ') ? replyTo!.subject : `Re: ${replyTo!.subject}`) : '',
-        body: '',
+        subject: isReply
+            ? replyTo!.subject.startsWith('Re: ')
+                ? replyTo!.subject
+                : `Re: ${replyTo!.subject}`
+            : initialMode === 'overdue_reminder_individual'
+              ? overdueTemplate.subject
+              : '',
+        body: initialMode === 'overdue_reminder_individual' ? overdueTemplate.body : '',
         account_id: preAccount?.id ? String(preAccount.id) : '',
         in_reply_to: replyTo?.message_id || '',
         campaign: '',
     });
 
-    const handleModeChange = (nextMode: 'single' | 'overdue_reminder' | 'announcement') => {
+    const handleModeChange = (nextMode: 'single' | 'overdue_reminder' | 'overdue_reminder_individual' | 'announcement') => {
         setMode(nextMode);
-        if (nextMode === 'overdue_reminder') {
+        if (nextMode === 'overdue_reminder' || nextMode === 'overdue_reminder_individual') {
             setData((current) => ({
                 ...current,
                 subject: overdueTemplate.subject,
                 body: overdueTemplate.body,
-                campaign: 'overdue_reminder',
+                campaign: nextMode === 'overdue_reminder' ? 'overdue_reminder' : '',
             }));
         } else if (nextMode === 'announcement') {
             const template = announcementTemplates[announcementTemplate];
@@ -128,6 +135,14 @@ export default function ComposeEmail() {
         e.preventDefault();
         if (mode === 'single') {
             post(route('emails.send'));
+            return;
+        }
+
+        if (mode === 'overdue_reminder_individual') {
+            const account = accounts.find((a) => String(a.id) === data.account_id);
+            if (account && window.confirm(`Send this overdue reminder and statement to ${account.name} (${account.email})?`)) {
+                post(route('emails.send-overdue'));
+            }
             return;
         }
 
@@ -182,6 +197,7 @@ export default function ComposeEmail() {
                                             className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
                                         >
                                             <option value="single">Individual email</option>
+                                            <option value="overdue_reminder_individual">Overdue reminder and statement (individual)</option>
                                             <option value="overdue_reminder">Overdue account reminder</option>
                                             <option value="announcement">Announcement to active accounts</option>
                                         </select>
@@ -205,12 +221,13 @@ export default function ComposeEmail() {
 
                                 {mode !== 'single' && (
                                     <div className="bg-muted/40 text-muted-foreground rounded-md border px-4 py-3 text-sm">
-                                        {mode === 'overdue_reminder' ? (
+                                        {mode === 'overdue_reminder' || mode === 'overdue_reminder_individual' ? (
                                             <>
-                                                This email will go to {overdueAccountsCount} account
-                                                {overdueAccountsCount === 1 ? '' : 's'} with overdue balances and a saved email address, with each
-                                                account's current-year statement attached. Use <code>{'{{name}}'}</code>,{' '}
-                                                <code>{'{{account_number}}'}</code>, and <code>{'{{overdue_amount}}'}</code> to personalize it.
+                                                {mode === 'overdue_reminder_individual'
+                                                    ? 'This email will go only to the selected account if it has an overdue balance. Its current-year statement will be attached.'
+                                                    : `This email will go to ${overdueAccountsCount} account${overdueAccountsCount === 1 ? '' : 's'} with overdue balances and a saved email address, with each account's current-year statement attached.`}{' '}
+                                                Use <code>{'{{name}}'}</code>, <code>{'{{account_number}}'}</code>, and{' '}
+                                                <code>{'{{overdue_amount}}'}</code> to personalize it.
                                             </>
                                         ) : (
                                             <>
@@ -223,12 +240,13 @@ export default function ComposeEmail() {
                                 )}
 
                                 {/* Account picker (optional convenience) */}
-                                {!isReply && mode === 'single' && (
+                                {!isReply && (mode === 'single' || mode === 'overdue_reminder_individual') && (
                                     <div className="space-y-1.5">
-                                        <Label>Account (optional — auto-fills To)</Label>
+                                        <Label>{mode === 'single' ? 'Account (optional — auto-fills To)' : 'Account *'}</Label>
                                         <select
                                             value={data.account_id}
                                             onChange={handleAccountChange}
+                                            required={mode === 'overdue_reminder_individual'}
                                             className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
                                         >
                                             <option value="">— Select account —</option>
@@ -238,11 +256,12 @@ export default function ComposeEmail() {
                                                 </option>
                                             ))}
                                         </select>
+                                        {errors.account_id && <p className="text-destructive text-xs">{errors.account_id}</p>}
                                     </div>
                                 )}
 
                                 {/* To */}
-                                {mode === 'single' && (
+                                {(mode === 'single' || mode === 'overdue_reminder_individual') && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="to">To *</Label>
                                         <Input
@@ -252,6 +271,7 @@ export default function ComposeEmail() {
                                             onChange={(e) => setData('to', e.target.value)}
                                             placeholder="recipient@example.com"
                                             disabled={isReply}
+                                            readOnly={mode === 'overdue_reminder_individual'}
                                         />
                                         {errors.to && <p className="text-destructive text-xs">{errors.to}</p>}
                                     </div>
@@ -298,7 +318,13 @@ export default function ComposeEmail() {
                                     </Link>
                                     <Button type="submit" disabled={processing}>
                                         <Send size={15} className="mr-2" />
-                                        {processing ? 'Sending…' : mode === 'single' ? 'Send Email' : 'Send to Accounts'}
+                                        {processing
+                                            ? 'Sending…'
+                                            : mode === 'single'
+                                              ? 'Send Email'
+                                              : mode === 'overdue_reminder_individual'
+                                                ? 'Send Overdue Statement'
+                                                : 'Send to Accounts'}
                                     </Button>
                                 </div>
                             </form>

@@ -46,6 +46,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/compose',           [EmailLogController::class, 'compose'])->name('compose');
         Route::post('/send',             [EmailLogController::class, 'send'])->name('send');
         Route::post('/send-bulk',        [EmailLogController::class, 'sendBulk'])->name('send-bulk');
+        Route::post('/send-overdue',     [EmailLogController::class, 'sendOverdue'])->name('send-overdue');
         Route::get('/{emailLog}',        [EmailLogController::class, 'show'])->name('show');
         Route::get('/{emailLog}/reply',  [EmailLogController::class, 'reply'])->name('reply');
         Route::post('/{emailLog}/read',  [EmailLogController::class, 'markRead'])->name('mark-read');

@@ -77,4 +77,57 @@ class BulkEmailTest extends TestCase
         $this->assertSame(1, EmailLog::outbound()->count());
         $this->assertSame($activeAccount->email, EmailLog::outbound()->firstOrFail()->recipient_email);
     }
+
+    public function test_it_sends_an_individual_overdue_reminder_with_the_account_statement(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+        $user->assignRole('admin');
+
+        $meter = Meter::factory()->create();
+        $account = $meter->account;
+        Billing::factory()->create([
+            'meter_id' => $meter->id,
+            'account_id' => $account->id,
+            'status' => 'overdue',
+            'due_date' => today()->subDay(),
+            'amount_due' => 725,
+        ]);
+
+        $this->actingAs($user)->post(route('emails.send-overdue'), [
+            'account_id' => $account->id,
+            'subject' => 'Your overdue balance',
+            'body' => '<p>{{name}} {{account_number}} {{overdue_amount}}</p>',
+        ])->assertRedirect();
+
+        $log = EmailLog::outbound()->firstOrFail();
+        $this->assertSame($account->email, $log->recipient_email);
+        $this->assertSame($account->id, $log->account_id);
+        $this->assertStringContainsString($account->name, $log->body);
+        $this->assertStringContainsString($account->account_number, $log->body);
+        $this->assertStringContainsString('725.00 KES', $log->body);
+        $this->assertSame(
+            "account_statement_{$account->account_number}.pdf",
+            $log->attachments[0]['name']
+        );
+        Mail::assertSent(\App\Mail\GenericEmail::class, fn ($mail) => count($mail->attachments()) === 1);
+    }
+
+    public function test_it_rejects_an_individual_overdue_reminder_for_an_account_without_overdue_balance(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+        $user->assignRole('admin');
+        $account = Account::factory()->create();
+
+        $this->actingAs($user)->from(route('accounts.show', $account))->post(route('emails.send-overdue'), [
+            'account_id' => $account->id,
+            'subject' => 'Your overdue balance',
+            'body' => '<p>Please see your statement.</p>',
+        ])->assertRedirect(route('accounts.show', $account))
+            ->assertSessionHas('error');
+
+        $this->assertSame(0, EmailLog::outbound()->count());
+        Mail::assertNothingSent();
+    }
 }
