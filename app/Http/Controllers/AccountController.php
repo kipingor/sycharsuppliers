@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Account;
+use App\Models\EmailLog;
 use App\Models\Resident;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -80,13 +81,20 @@ class AccountController extends Controller
         ]);
 
         $balance = $account->getCurrentBalance();
+        $overdueAmount = $account->billings()
+            ->whereIn('status', ['pending', 'overdue', 'partially_paid'])
+            ->where('due_date', '<', today())
+            ->where('amount_due', '>', 0)
+            ->sum('amount_due');
 
         return Inertia::render('accounts/show', [
             'account' => $account,
             'balance' => $balance,
+            'overdueAmount' => $overdueAmount,
             'can' => [
                 'update' => Auth::user()->can('update', $account),
                 'delete' => Auth::user()->can('delete', $account),
+                'sendEmail' => Auth::user()->can('create', EmailLog::class),
             ],
         ]);
     }
