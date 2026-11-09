@@ -20,6 +20,7 @@ class EmailService
      *                                name        string   recipient display name
      *                                account_id  int      FK to accounts table
      *                                in_reply_to string   Message-Id for threading
+     *                                attachments array    [{name, mime, content}]
      */
     public function send(
         string $recipient,
@@ -30,6 +31,7 @@ class EmailService
         $accountId = $options['account_id']  ?? EmailLog::resolveAccountId($recipient);
         $inReplyTo = $options['in_reply_to'] ?? null;
         $name      = $options['name']        ?? null;
+        $attachments = $options['attachments'] ?? [];
 
         $log = EmailLog::create([
             'direction'       => 'outbound',
@@ -42,11 +44,19 @@ class EmailService
             'body'            => $body,
             'status'          => EmailLog::STATUS_QUEUED,
             'in_reply_to'     => $inReplyTo,
+            'attachments'     => array_map(
+                fn (array $attachment) => [
+                    'name' => $attachment['name'],
+                    'mime' => $attachment['mime'] ?? 'application/octet-stream',
+                    'size' => strlen($attachment['content']),
+                ],
+                $attachments
+            ) ?: null,
         ]);
 
         try {
             $sentMessage = Mail::to($recipient, $name)
-                ->send(new GenericEmail($subject, $body, $inReplyTo));
+                ->send(new GenericEmail($subject, $body, $inReplyTo, $attachments));
 
             $log->update([
                 'status'      => EmailLog::STATUS_SENT,

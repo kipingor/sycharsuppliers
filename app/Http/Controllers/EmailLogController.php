@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Account;
 use App\Models\EmailLog;
+use App\Services\Billing\AccountStatementGenerator;
 use App\Services\EmailService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
@@ -16,7 +17,10 @@ class EmailLogController extends Controller
 {
     use AuthorizesRequests;
 
-    public function __construct(private EmailService $emailService) {}
+    public function __construct(
+        private EmailService $emailService,
+        private AccountStatementGenerator $statementGenerator,
+    ) {}
 
     // ─── Inbox / Sent list ─────────────────────────────────────────────────
 
@@ -116,10 +120,25 @@ class EmailLogController extends Controller
             ->orderBy('name')
             ->get();
 
+        $overdueAccountsCount = Account::whereNotNull('email')
+            ->where('email', '!=', '')
+            ->whereHas('billings', fn ($query) => $query
+                ->whereIn('status', ['pending', 'overdue', 'partially_paid'])
+                ->where('due_date', '<', today())
+                ->where('amount_due', '>', 0))
+            ->count();
+
+        $activeAccountsCount = Account::active()
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->count();
+
         return Inertia::render('emails/compose', [
-            'accounts'   => $accounts,
-            'preAccount' => $preAccount,
-            'replyTo'    => null,
+            'accounts'               => $accounts,
+            'preAccount'             => $preAccount,
+            'replyTo'                => null,
+            'overdueAccountsCount'   => $overdueAccountsCount,
+            'activeAccountsCount'    => $activeAccountsCount,
         ]);
     }
 
@@ -144,6 +163,8 @@ class EmailLogController extends Controller
                 'subject'    => $emailLog->subject,
                 'message_id' => $emailLog->message_id,
             ],
+            'overdueAccountsCount' => 0,
+            'activeAccountsCount'  => 0,
         ]);
     }
 
@@ -178,6 +199,104 @@ class EmailLogController extends Controller
 
         return redirect()->route('emails.show', $log)
             ->with('success', 'Email sent successfully.');
+    }
+
+    public function sendBulk(Request $request): RedirectResponse
+    {
+        $this->authorize('create', EmailLog::class);
+
+        $data = $request->validate([
+            'campaign' => 'required|in:overdue_reminder,announcement',
+            'subject'  => 'required|string|max:255',
+            'body'     => 'required|string|max:20000',
+        ]);
+
+        $sent = 0;
+        $failed = 0;
+        $eligible = 0;
+
+        if ($data['campaign'] === 'overdue_reminder') {
+            Account::whereNotNull('email')
+                ->where('email', '!=', '')
+                ->whereHas('billings', fn ($query) => $query
+                    ->whereIn('status', ['pending', 'overdue', 'partially_paid'])
+                    ->where('due_date', '<', today())
+                    ->where('amount_due', '>', 0))
+                ->orderBy('id')
+                ->chunkById(100, function ($accounts) use ($data, &$sent, &$failed, &$eligible) {
+                    foreach ($accounts as $account) {
+                        $overdueAmount = $account->billings()
+                            ->whereIn('status', ['pending', 'overdue', 'partially_paid'])
+                            ->where('due_date', '<', today())
+                            ->where('amount_due', '>', 0)
+                            ->sum('amount_due');
+
+                        if ($overdueAmount <= 0) {
+                            continue;
+                        }
+                        $eligible++;
+
+                        $body = strtr($data['body'], [
+                            '{{name}}' => e($account->name),
+                            '{{account_number}}' => e($account->account_number),
+                            '{{overdue_amount}}' => number_format((float) $overdueAmount, 2) . ' KES',
+                        ]);
+                        $periodStart = now()->startOfYear()->toDateString();
+                        $periodEnd = today()->toDateString();
+                        $statementPdf = $this->statementGenerator
+                            ->generatePdf($account, $periodStart, $periodEnd)
+                            ->output();
+
+                        $log = $this->emailService->send(
+                            $account->email,
+                            $data['subject'],
+                            $body,
+                            [
+                                'account_id' => $account->id,
+                                'name' => $account->name,
+                                'attachments' => [[
+                                    'name' => "account_statement_{$account->account_number}.pdf",
+                                    'mime' => 'application/pdf',
+                                    'content' => $statementPdf,
+                                ]],
+                            ]
+                        );
+
+                        $log->status === EmailLog::STATUS_FAILED ? $failed++ : $sent++;
+                    }
+                });
+        } else {
+            Account::active()
+                ->whereNotNull('email')
+                ->where('email', '!=', '')
+                ->orderBy('id')
+                ->chunkById(100, function ($accounts) use ($data, &$sent, &$failed, &$eligible) {
+                    foreach ($accounts as $account) {
+                        $eligible++;
+
+                        $log = $this->emailService->send(
+                            $account->email,
+                            $data['subject'],
+                            $data['body'],
+                            ['account_id' => $account->id, 'name' => $account->name]
+                        );
+
+                        $log->status === EmailLog::STATUS_FAILED ? $failed++ : $sent++;
+                    }
+                });
+        }
+
+        $redirect = redirect()->route('emails.index');
+
+        if ($failed > 0) {
+            return $redirect->with('error', "Bulk email completed with failures: {$sent} sent, {$failed} failed. See the email log for details.");
+        }
+
+        if ($eligible === 0) {
+            return $redirect->with('warning', 'No eligible accounts were found for this bulk email.');
+        }
+
+        return $redirect->with('success', "Bulk email complete: {$sent} sent, {$failed} failed.");
     }
 
     // ─── Mark read ────────────────────────────────────────────────────────
