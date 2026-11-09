@@ -7,6 +7,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Headers;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Queue\SerializesModels;
 
 /**
@@ -23,6 +24,7 @@ class GenericEmail extends Mailable
         protected string  $emailSubject,
         protected string  $emailBody,          // HTML accepted
         protected ?string $inReplyTo = null,   // Message-Id of the email being replied to
+        protected array $emailAttachments = [],
     ) {
     }
 
@@ -47,7 +49,13 @@ class GenericEmail extends Mailable
 
     public function attachments(): array
     {
-        return [];
+        return array_map(
+            fn (array $attachment) => Attachment::fromData(
+                fn () => $attachment['content'],
+                $attachment['name']
+            )->withMime($attachment['mime'] ?? 'application/octet-stream'),
+            $this->emailAttachments
+        );
     }
 
     private function wrapBody(string $body): string
