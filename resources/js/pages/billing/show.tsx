@@ -65,7 +65,7 @@ interface Bill {
     total_amount: number;
     paid_amount: number;
     balance: number;
-    status: 'pending' | 'partially_paid' | 'paid' | 'overdue' | 'voided';
+    status: 'pending' | 'partially_paid' | 'paid' | 'overdue' | 'voided' | 'written_off';
     issued_at: string;
     due_date: string;
     paid_at?: string;
@@ -364,6 +364,7 @@ export default function BillShow() {
         pending:        'bg-sky-400/15 text-sky-700 dark:bg-sky-400/10 dark:text-sky-400',
         overdue:        'bg-pink-400/15 text-pink-700 dark:bg-pink-400/10 dark:text-pink-400',
         partially_paid: 'bg-blue-400/15 text-blue-700 dark:bg-blue-400/10 dark:text-blue-400',
+        written_off: 'bg-amber-400/15 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400',
         voided:         'bg-gray-400/15 text-gray-700 dark:bg-gray-400/10 dark:text-gray-400',
     };
 
@@ -371,6 +372,7 @@ export default function BillShow() {
         previous_resident_debt: 'bg-amber-400/15 text-amber-700 dark:text-amber-400',
         billing_error:          'bg-red-400/15 text-red-700 dark:text-red-400',
         goodwill:               'bg-purple-400/15 text-purple-700 dark:text-purple-400',
+        bad_debt_writeoff:      'bg-orange-400/15 text-orange-700 dark:text-orange-400',
         other:                  'bg-gray-400/15 text-gray-700 dark:text-gray-400',
     };
 
@@ -378,6 +380,7 @@ export default function BillShow() {
         previous_resident_debt: 'Prev. Resident Debt',
         billing_error:          'Billing Error',
         goodwill:               'Goodwill',
+        bad_debt_writeoff:      'Bad Debt Write-off',
         other:                  'Other',
     };
 
@@ -418,7 +421,7 @@ export default function BillShow() {
         }
     };
 
-    const canApplyCreditNote = bill.status !== 'voided' && bill.status !== 'paid' && bill.balance > 0;
+    const canApplyCreditNote = ['pending', 'partially_paid', 'overdue'].includes(bill.status) && bill.balance > 0;
     const appliedCreditNotes = (bill.credit_notes ?? []).filter(n => n.status === 'applied');
     const totalCredited      = appliedCreditNotes.reduce((s, n) => s + n.amount, 0);
 
@@ -580,6 +583,11 @@ export default function BillShow() {
                                 <Badge className={statusClasses[bill.status]}>
                                     {bill.status.replace('_', ' ')}
                                 </Badge>
+                                {bill.status === 'written_off' && (
+                                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                                        Settled by credit note; no payment was received for the written-off amount.
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500">Issued Date</p>

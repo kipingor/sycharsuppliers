@@ -45,6 +45,7 @@ const TYPE_LABELS: Record<string, string> = {
     previous_resident_debt: 'Prev. Resident Debt',
     billing_error:          'Billing Error',
     goodwill:               'Goodwill',
+    bad_debt_writeoff:      'Bad Debt Write-off',
     other:                  'Other',
 };
 
@@ -52,6 +53,7 @@ const TYPE_CLASSES: Record<string, string> = {
     previous_resident_debt: 'bg-amber-400/15 text-amber-700 dark:text-amber-400',
     billing_error:          'bg-red-400/15 text-red-700 dark:text-red-400',
     goodwill:               'bg-purple-400/15 text-purple-700 dark:text-purple-400',
+    bad_debt_writeoff:      'bg-orange-400/15 text-orange-700 dark:text-orange-400',
     other:                  'bg-gray-400/15 text-gray-600',
 };
 
@@ -75,11 +77,16 @@ export default function CreditNotesIndex() {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
 
                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <FileMinus size={22} className="text-amber-500" />
-                        Credit Notes
-                    </h1>
-                    <p className="text-sm text-muted-foreground">{notes.total} total</p>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold flex items-center gap-2">
+                            <FileMinus size={22} className="text-amber-500" />
+                            Credit Notes
+                        </h1>
+                        <p className="text-sm text-muted-foreground">{notes.total} total</p>
+                    </div>
+                    <Button size="sm" asChild>
+                        <Link href={route('credit-notes.apply')}>Apply bad debt write-off</Link>
+                    </Button>
                 </div>
 
                 {/* Filters */}

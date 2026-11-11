@@ -6,6 +6,7 @@ use App\Models\Billing;
 use App\Models\Expense;
 use App\Models\Payment;
 use App\Models\Account;
+use App\Services\Billing\AccountConflictReport;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -21,6 +22,11 @@ class ReportsController extends Controller
     public function index()
     {
         return Inertia::render('reports/reports');
+    }
+
+    public function conflicts(AccountConflictReport $report)
+    {
+        return Inertia::render('reports/conflicts', $report->build());
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -109,7 +115,7 @@ class ReportsController extends Controller
 
         // ── 3. Outstanding receivables at end of period ───────────────────────
         $outstandingBalance = Billing::where('due_date', '<=', $endDate)
-            ->whereNotIn('status', ['paid', 'voided'])
+            ->whereNotIn('status', ['paid', 'voided', 'written_off'])
             ->sum('amount_due');
 
         // ── 4. Monthly breakdown ──────────────────────────────────────────────
@@ -362,7 +368,7 @@ class ReportsController extends Controller
         $today = now()->toDateString();
 
         $bills = Billing::with('account:id,name,account_number,phone,email')
-            ->whereNotIn('status', ['paid', 'voided'])
+            ->whereNotIn('status', ['paid', 'voided', 'written_off'])
             ->where('amount_due', '>', 0)
             ->orderBy('due_date')
             ->get();
@@ -433,18 +439,18 @@ class ReportsController extends Controller
 
         $accounts = Account::with(['billings', 'payments'])
             ->whereHas('billings', function ($q) {
-                $q->whereNotIn('status', ['paid', 'voided'])->where('amount_due', '>', 0);
+                $q->whereNotIn('status', ['paid', 'voided', 'written_off'])->where('amount_due', '>', 0);
             })
             ->get()
             ->map(function (Account $account) {
                 $outstanding = (float) $account->billings()
-                    ->whereNotIn('status', ['paid', 'voided'])
+                    ->whereNotIn('status', ['paid', 'voided', 'written_off'])
                     ->sum('amount_due');
 
                 $lastPayment = $account->payments()->latest('payment_date')->first();
 
                 $oldestBill = $account->billings()
-                    ->whereNotIn('status', ['paid', 'voided'])
+                    ->whereNotIn('status', ['paid', 'voided', 'written_off'])
                     ->orderBy('due_date')
                     ->first();
 
@@ -461,7 +467,7 @@ class ReportsController extends Controller
                     'address'             => $account->address,
                     'outstanding_balance' => $outstanding,
                     'bill_count'          => $account->billings()
-                        ->whereNotIn('status', ['paid', 'voided'])->count(),
+                        ->whereNotIn('status', ['paid', 'voided', 'written_off'])->count(),
                     'last_payment_date'   => $lastPayment?->payment_date?->format('Y-m-d'),
                     'last_payment_amount' => $lastPayment ? (float) $lastPayment->amount : null,
                     'days_overdue'        => $daysOverdue,

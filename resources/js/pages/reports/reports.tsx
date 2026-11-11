@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link } from '@inertiajs/react';
 import { type BreadcrumbItem } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
-import { BarChart3, FileText, TrendingDown, TrendingUp, Users, Clock, ArrowRight } from 'lucide-react';
+import { AlertTriangle, BarChart3, FileText, TrendingDown, TrendingUp, Users, Clock, ArrowRight } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Reports', href: '#' }];
 
@@ -46,6 +46,14 @@ const REPORTS = [
         icon: Users,
         color: 'text-purple-600',
         bg: 'bg-purple-50 dark:bg-purple-950/30',
+    },
+    {
+        title: 'Account Conflict Report',
+        description: 'Find paid bills with balances, inconsistent bill totals, unreconciled payments, and statement-to-bill differences.',
+        href: 'reports.conflicts',
+        icon: AlertTriangle,
+        color: 'text-amber-600',
+        bg: 'bg-amber-50 dark:bg-amber-950/30',
     },
 ];
 

@@ -62,6 +62,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/pl',            [ReportsController::class, 'plReport'])->name('pl');
         Route::get('/aging',         [ReportsController::class, 'agingReport'])->name('aging');
         Route::get('/debtors',       [ReportsController::class, 'debtorsReport'])->name('debtors');
+        Route::get('/conflicts',     [ReportsController::class, 'conflicts'])->name('conflicts');
     });
 });
 

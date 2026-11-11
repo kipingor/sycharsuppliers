@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account;
 use App\Models\Billing;
 use App\Models\CreditNote;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class CreditNoteController extends Controller
@@ -31,26 +33,146 @@ class CreditNoteController extends Controller
         ]);
     }
 
+    public function applyForm(Request $request)
+    {
+        $filters = $request->validate([
+            'through_year' => 'nullable|integer|min:2000|max:' . now()->year,
+            'account_id' => 'nullable|exists:accounts,id',
+        ]);
+        $throughYear = (int) ($filters['through_year'] ?? now()->year - 2);
+
+        $bills = Billing::query()
+            ->with([
+                'account:id,name,account_number,status',
+                'allocations.payment:id,status,deleted_at',
+                'directPayments:id,status,deleted_at',
+                'creditNotes:id,billing_id,amount,status',
+            ])
+            ->whereIn('status', ['pending', 'partially_paid', 'overdue'])
+            ->where('amount_due', '>', 0)
+            ->where('billing_period', '<=', sprintf('%04d-12', $throughYear))
+            ->when($filters['account_id'] ?? null, fn ($query, $accountId) => $query->where('account_id', $accountId))
+            ->orderBy('billing_period')
+            ->orderBy('account_id')
+            ->paginate(100)
+            ->withQueryString()
+            ->through(fn (Billing $bill) => [
+                'id' => $bill->id,
+                'billing_period' => $bill->billing_period,
+                'total_amount' => (float) $bill->total_amount,
+                'stored_amount_due' => (float) $bill->amount_due,
+                'balance' => $bill->balance,
+                'status' => $bill->status,
+                'account' => [
+                    'id' => $bill->account->id,
+                    'name' => $bill->account->name,
+                    'account_number' => $bill->account->account_number,
+                    'status' => $bill->account->status,
+                ],
+            ]);
+
+        return Inertia::render('credit-notes/apply', [
+            'bills' => $bills,
+            'accounts' => Account::orderBy('name', 'asc')->get(['id', 'name', 'account_number', 'status']),
+            'filters' => [
+                'through_year' => $throughYear,
+                'account_id' => $filters['account_id'] ?? '',
+            ],
+        ]);
+    }
+
+    public function applyBulk(Request $request)
+    {
+        $data = $request->validate([
+            'billing_ids' => 'required|array|min:1|max:100',
+            'billing_ids.*' => 'required|integer|distinct|exists:billings,id',
+            'reason' => 'required|string|min:10|max:2000',
+        ]);
+
+        $created = DB::transaction(function () use ($data) {
+            $bills = Billing::query()
+                ->whereIn('id', $data['billing_ids'], 'and', false)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            if ($bills->count() !== count($data['billing_ids'])) {
+                throw ValidationException::withMessages([
+                    'billing_ids' => 'One or more selected bills could not be found.',
+                ]);
+            }
+
+            foreach ($bills as $bill) {
+                $bill = Billing::with(['allocations.payment', 'directPayments', 'creditNotes'])
+                    ->lockForUpdate()
+                    ->findOrFail($bill->id);
+
+                if (!in_array($bill->status, ['pending', 'partially_paid', 'overdue'], true)
+                    || (float) $bill->amount_due <= 0
+                    || $bill->billing_period > sprintf('%04d-12', now()->year - 1)) {
+                    throw ValidationException::withMessages([
+                        'billing_ids' => "Bill #{$bill->id} is no longer eligible for a bad-debt write-off.",
+                    ]);
+                }
+
+                $balance = $bill->balance;
+                if ($balance <= 0 || abs($balance - (float) $bill->amount_due) > 0.01) {
+                    throw ValidationException::withMessages([
+                        'billing_ids' => "Bill #{$bill->id} has a balance conflict. Resolve it before writing it off.",
+                    ]);
+                }
+
+                CreditNote::create([
+                    'billing_id' => $bill->id,
+                    'reference' => CreditNote::generateReference(),
+                    'type' => 'bad_debt_writeoff',
+                    'amount' => $balance,
+                    'reason' => $data['reason'],
+                    'status' => 'applied',
+                    'created_by' => Auth::id(),
+                ]);
+
+                $bill->update([
+                    'amount_due' => 0,
+                    'status' => 'written_off',
+                    'paid_at' => null,
+                ]);
+            }
+
+            return count($bills);
+        });
+
+        return redirect()->route('credit-notes.apply')
+            ->with('success', "{$created} bill(s) written off. Each bill has its own credit note and audit record.");
+    }
+
     // ── Apply a credit note to a specific bill ─────────────────────────────────
     public function store(Request $request, Billing $billing)
     {
-        if ($billing->status === 'voided') {
-            return back()->withErrors(['billing' => 'Cannot apply a credit note to a voided bill.']);
-        }
-
-        // balance is a computed accessor (total_amount - paid_amount - credits),
-        // so we read it but never write it back to the DB.
-        $currentBalance = $billing->balance;
-
         $data = $request->validate([
             'type'                => 'required|in:previous_resident_debt,billing_error,goodwill,other',
-            'amount'              => ['required', 'numeric', 'min:0.01', "max:{$currentBalance}"],
+            'amount'              => 'required|numeric|min:0.01',
             'reason'              => 'required|string|min:10',
             'previous_account_id' => 'nullable|exists:accounts,id',
         ]);
 
-        DB::transaction(function () use ($data, $billing, $currentBalance) {
-            // 1. Persist the credit note (this is the source of truth for the credit)
+        DB::transaction(function () use ($data, $billing) {
+            $billing = Billing::with(['allocations.payment', 'directPayments', 'creditNotes'])
+                ->lockForUpdate()
+                ->findOrFail($billing->id);
+            $currentBalance = $billing->balance;
+
+            if (!in_array($billing->status, ['pending', 'partially_paid', 'overdue'], true) || $currentBalance <= 0) {
+                throw ValidationException::withMessages([
+                    'billing' => 'Only bills with an open balance can receive a credit note.',
+                ]);
+            }
+            if ((float) $data['amount'] > $currentBalance) {
+                throw ValidationException::withMessages([
+                    'amount' => 'The credit amount exceeds the bill’s current open balance.',
+                ]);
+            }
+
             CreditNote::create([
                 'billing_id'          => $billing->id,
                 'previous_account_id' => $data['previous_account_id'] ?? null,
@@ -62,22 +184,8 @@ class CreditNoteController extends Controller
                 'created_by'          => Auth::id(),
             ]);
 
-            // 2. Compute new effective balance after the credit
-            $newBalance = max(0, $currentBalance - $data['amount']);
-
-            // 3. Only update status/paid_at — never write computed columns
-            $updates = [];
-
-            if ($newBalance <= 0) {
-                $updates['status']  = 'paid';
-                $updates['paid_at'] = now();
-            } elseif ($billing->paid_amount > 0 && $billing->status === 'pending') {
-                $updates['status'] = 'partially_paid';
-            }
-
-            if (!empty($updates)) {
-                $billing->update($updates);
-            }
+            $billing->refresh()->load(['allocations.payment', 'directPayments', 'creditNotes']);
+            $this->syncBillSettlement($billing);
         });
 
         return redirect()
@@ -88,16 +196,18 @@ class CreditNoteController extends Controller
     // ── Void a credit note (reverses the adjustment) ───────────────────────────
     public function void(Request $request, CreditNote $creditNote)
     {
-        if ($creditNote->status === 'voided') {
-            return back()->withErrors(['credit_note' => 'This credit note is already voided.']);
-        }
-
         $data = $request->validate([
             'void_reason' => 'required|string|min:10',
         ]);
 
         DB::transaction(function () use ($data, $creditNote) {
-            // 1. Void the credit note first
+            $creditNote = CreditNote::query()->lockForUpdate()->findOrFail($creditNote->id);
+            if ($creditNote->status === 'voided') {
+                throw ValidationException::withMessages([
+                    'credit_note' => 'This credit note is already voided.',
+                ]);
+            }
+
             $creditNote->update([
                 'status'      => 'voided',
                 'void_reason' => $data['void_reason'],
@@ -105,29 +215,37 @@ class CreditNoteController extends Controller
                 'voided_by'   => Auth::id(),
             ]);
 
-            // 2. Re-read billing so computed accessors (balance, paid_amount)
-            //    reflect the now-voided credit note
-            $billing     = $creditNote->billing->fresh(['allocations.payment', 'creditNotes']);
-            $newBalance  = $billing->balance; // accessor now excludes the voided credit
-
-            // 3. Only update status — never write computed columns
-            $updates = [];
-
-            if ($newBalance <= 0) {
-                // Still fully settled by payments
-                $updates['status']  = 'paid';
-                $updates['paid_at'] = $billing->paid_at ?? now();
-            } elseif ($billing->status === 'paid') {
-                // Was marked paid only because of the credit — revert
-                $updates['status']  = $billing->paid_amount > 0 ? 'partially_paid' : 'pending';
-                $updates['paid_at'] = null;
-            }
-
-            if (!empty($updates)) {
-                $billing->update($updates);
-            }
+            $billing = Billing::with(['allocations.payment', 'directPayments', 'creditNotes'])
+                ->lockForUpdate()
+                ->findOrFail($creditNote->billing_id);
+            $this->syncBillSettlement($billing);
         });
 
         return back()->with('success', 'Credit note voided and billing balance restored.');
+    }
+
+    private function syncBillSettlement(Billing $billing): void
+    {
+        $balance = $billing->balance;
+        $paid = $billing->paid_amount;
+        $credited = $billing->creditNotes->where('status', 'applied')->sum('amount');
+
+        if ($balance <= 0) {
+            $status = $credited > 0 && $paid < (float) $billing->total_amount
+                ? 'written_off'
+                : 'paid';
+            $paidAt = $status === 'paid' ? ($billing->paid_at ?? now()) : null;
+        } else {
+            $status = $paid + $credited > 0
+                ? 'partially_paid'
+                : ($billing->due_date && $billing->due_date->isPast() ? 'overdue' : 'pending');
+            $paidAt = null;
+        }
+
+        $billing->update([
+            'amount_due' => $balance,
+            'status' => $status,
+            'paid_at' => $paidAt,
+        ]);
     }
 }

@@ -77,7 +77,9 @@ class PaymentReconciliationService
 
             // Update payment reconciliation status
             $payment->update([
-                'reconciliation_status' => $remainingAmount > 0.01 ? 'partially_reconciled' : 'reconciled',
+                'reconciliation_status' => $carryForward || $remainingAmount <= config('reconciliation.minimum_allocation', 0.01)
+                    ? 'reconciled'
+                    : 'partially_reconciled',
                 'reconciled_at' => now(),
                 'reconciled_by' => Auth::id(),
             ]);
@@ -131,7 +133,7 @@ class PaymentReconciliationService
             Log::info("Completed reconciliation for payment #{$payment->id}", [
                 'allocations_count' => $allocations->count(),
                 'total_allocated' => $totalAllocated,
-                'carry_forward_amount' => $carryForward?->amount ?? 0,
+                'carry_forward_amount' => $carryForward?->balance ?? 0,
             ]);
 
             return $result;
@@ -148,7 +150,7 @@ class PaymentReconciliationService
 
         // Get outstanding bills for this account, oldest first
         $bills = Billing::where('account_id', $payment->account_id)
-            ->whereNotIn('status', ['paid','voided'])
+            ->whereNotIn('status', ['paid', 'voided', 'written_off'])
             ->where('amount_due', '>', 0)
             ->orderBy('due_date')
             ->orderBy('id')
@@ -273,10 +275,10 @@ class PaymentReconciliationService
         $carryForward = CarryForwardBalance::create([
             'account_id' => $payment->account_id,
             'payment_id' => $payment->id,
-            'amount' => $amount,
-            'amount_due' => $amount,
+            'type' => 'credit',
+            'balance' => $amount,
             'status' => 'active',
-            'created_at' => now(),
+            'notes' => "Overpayment credit created from payment #{$payment->id}.",
         ]);
 
         Log::info("Created carry-forward balance", [
@@ -356,7 +358,7 @@ class PaymentReconciliationService
             'allocations' => $allocationDetails,
             'carry_forward' => $carryForward ? [
                 'id' => $carryForward->id,
-                'amount' => $carryForward->amount,
+                'amount' => $carryForward->balance,
                 'balance' => $carryForward->balance,
                 'status' => $carryForward->status,
             ] : null,

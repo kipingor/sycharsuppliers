@@ -10,6 +10,7 @@ enum BillingStatus: string
     case PARTIALLY_PAID = 'partially_paid';
     case VOID = 'void';
     case UNPAID = 'unpaid';
+    case WRITTEN_OFF = 'written_off';
 
     /**
      * Get the label for the billing status.
@@ -23,6 +24,7 @@ enum BillingStatus: string
             self::PARTIALLY_PAID => 'Partially Paid',
             self::VOID => 'Void',
             self::UNPAID => 'Unpaid',
+            self::WRITTEN_OFF => 'Written off',
         };
     }
 
@@ -38,6 +40,7 @@ enum BillingStatus: string
             self::PARTIALLY_PAID => 'yellow',
             self::VOID => 'gray',
             self::UNPAID => 'orange',
+            self::WRITTEN_OFF => 'amber',
         };
     }
 
@@ -63,6 +66,11 @@ enum BillingStatus: string
     public function isVoid(): bool
     {
         return $this === self::VOID;
+    }
+
+    public function isWrittenOff(): bool
+    {
+        return $this === self::WRITTEN_OFF;
     }
 
     /**

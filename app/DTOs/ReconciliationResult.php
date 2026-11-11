@@ -31,7 +31,7 @@ readonly class ReconciliationResult
      */
     public function isFullyReconciled(): bool
     {
-        return $this->remainingAmount < 0.01;
+        return $this->payment->reconciliation_status === 'reconciled';
     }
 
     /**

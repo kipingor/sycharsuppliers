@@ -132,10 +132,11 @@ class ReconcilePaymentsCommand extends Command
 
             try {
                 $result = $reconciliationService->reconcilePayment($payment);
+                $status = $result->payment->reconciliation_status;
 
-                if ($result->reconciliationStatus === 'reconciled') {
+                if ($status === 'reconciled') {
                     $successCount++;
-                } elseif ($result->reconciliationStatus === 'partially_reconciled') {
+                } elseif ($status === 'partially_reconciled') {
                     $partialCount++;
                 }
 
@@ -143,9 +144,9 @@ class ReconcilePaymentsCommand extends Command
                     'payment_id' => $payment->id,
                     'account' => $payment->account->account_number,
                     'amount' => $payment->amount,
-                    'allocated' => $result->allocatedAmount,
+                    'allocated' => $result->totalAllocated,
                     'remaining' => $result->remainingAmount,
-                    'status' => $result->reconciliationStatus,
+                    'status' => $status,
                     'bills_paid' => count($result->allocations),
                 ];
             } catch (\Exception $e) {

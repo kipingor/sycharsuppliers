@@ -43,8 +43,8 @@ class PaymentReconciledListener implements ShouldQueue
     {
         Log::info('Payment reconciled, processing follow-up actions', [
             'payment_id' => $event->payment->id,
-            'reconciliation_status' => $event->result->reconciliationStatus,
-            'allocated_amount' => $event->result->allocatedAmount,
+            'reconciliation_status' => $event->result->payment->reconciliation_status,
+            'allocated_amount' => $event->result->totalAllocated,
         ]);
 
         try {
