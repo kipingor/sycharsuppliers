@@ -11,7 +11,7 @@ import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { debounce } from 'lodash';
 import { EllipsisVertical, Eye, Pencil, PlusCircle, Trash } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface Account {
     id: number;
@@ -30,6 +30,7 @@ interface Payment {
     reference?: string;
     status: string;
     reconciliation_status?: string;
+    allocations_count?: number;
 }
 
 interface PaymentsPageProps {
@@ -63,17 +64,23 @@ export default function Payments() {
     const { payments, filters, accounts, can, auth } = usePage<SharedData & PaymentsPageProps>().props;
     const [search, setSearch] = useState<string>(filters.search || '');
 
-    const handleSearch = debounce((query: string) => {
-        router.get(
-            route('payments.index'),
-            { search: query },
-            {
-                only: ['payments'],
-                replace: true,
-                preserveState: true,
-            },
-        );
-    }, 300);
+    const handleSearch = useMemo(
+        () =>
+            debounce((query: string) => {
+                router.get(
+                    route('payments.index'),
+                    { ...filters, search: query || undefined },
+                    {
+                        only: ['payments', 'filters'],
+                        replace: true,
+                        preserveState: true,
+                    },
+                );
+            }, 300),
+        [filters],
+    );
+
+    useEffect(() => () => handleSearch.cancel(), [handleSearch]);
 
     const statusClasses: Record<string, string> = {
         pending: 'bg-yellow-400/20 text-yellow-700 dark:bg-yellow-400/10 dark:text-yellow-300',
@@ -93,10 +100,10 @@ export default function Payments() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Payments" />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-full min-w-0 flex-1 flex-col gap-4 rounded-xl p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-2xl font-bold">Payments</h1>
-                    <div className="flex gap-2">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
                         <Input
                             type="text"
                             placeholder="Search payments..."
@@ -105,7 +112,7 @@ export default function Payments() {
                                 setSearch(e.target.value);
                                 handleSearch(e.target.value);
                             }}
-                            className="w-64"
+                            className="w-full sm:w-64"
                         />
                         {can.create && (
                             <Link href={route('payments.create')}>
@@ -128,6 +135,7 @@ export default function Payments() {
                     </div>
                 ) : (
                     <>
+                        <div className="hidden md:block">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -182,7 +190,7 @@ export default function Payments() {
                                                     )}
 
                                                     {/* Check if payment can be deleted based on status */}
-                                                    {payment.reconciliation_status === 'pending' && (payment as any).allocations_count === 0 && (
+                                                    {payment.reconciliation_status === 'pending' && payment.allocations_count === 0 && (
                                                         <DropdownMenuItem onClick={() => handleDelete(payment.id)} className="text-red-600">
                                                             <Trash size={16} className="mr-2" /> Delete
                                                         </DropdownMenuItem>
@@ -195,6 +203,56 @@ export default function Payments() {
                                 ))}
                             </TableBody>
                         </Table>
+                        </div>
+
+                        <div className="space-y-3 md:hidden">
+                            {payments.data.map((payment) => (
+                                <div key={payment.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <Link href={route('payments.show', payment.id)} className="font-semibold hover:underline">
+                                                {payment.account?.name || 'Unknown account'}
+                                            </Link>
+                                            {payment.account?.account_number && (
+                                                <p className="mt-1 text-sm text-muted-foreground">{payment.account.account_number}</p>
+                                            )}
+                                        </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" aria-label={`Actions for payment ${payment.id}`}>
+                                                    <EllipsisVertical size={18} />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('payments.show', payment.id)}><Eye size={16} className="mr-2" /> View Details</Link>
+                                                </DropdownMenuItem>
+                                                {payment.reconciliation_status === 'pending' && (
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={route('payments.edit', payment.id)}><Pencil size={16} className="mr-2" /> Edit</Link>
+                                                    </DropdownMenuItem>
+                                                )}
+                                                {payment.reconciliation_status === 'pending' && payment.allocations_count === 0 && (
+                                                    <DropdownMenuItem onClick={() => handleDelete(payment.id)} className="text-red-600">
+                                                        <Trash size={16} className="mr-2" /> Delete
+                                                    </DropdownMenuItem>
+                                                )}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                                        <div>
+                                            <p className="font-semibold">{formatCurrency(Number(payment.amount))}</p>
+                                            <p className="mt-1 text-muted-foreground">{new Date(payment.payment_date).toLocaleDateString()} · {payment.method}</p>
+                                            <p className="mt-1 break-all text-xs text-muted-foreground">{payment.reference || payment.transaction_id || 'No reference'}</p>
+                                        </div>
+                                        <Badge className={statusClasses[payment.status.toLowerCase()] || statusClasses.pending}>
+                                            {payment.status}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
 
                         <Pagination links={payments.links} />
                     </>

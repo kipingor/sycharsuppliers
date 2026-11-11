@@ -16,7 +16,7 @@ export default function Pagination({ links = [] }: PaginationProps) {
   if (links.length === 3) return null;
 
   return (
-    <div className="mt-4 flex justify-center gap-2">
+    <div className="mt-4 flex flex-wrap justify-center gap-2">
       {links.map((link, index) => (
         <Button
           key={index}

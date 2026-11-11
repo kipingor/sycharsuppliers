@@ -1,7 +1,7 @@
 import { Head, usePage, router, Link } from "@inertiajs/react";
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from "@/types";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pencil, Trash, PlusCircle, EllipsisVertical, Eye } from "lucide-react";
@@ -16,14 +16,18 @@ import Pagination from "@/components/pagination";
 interface Resident {
     id: number;
     name: string;
-    email: string;
-    phone: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
 }
 
 interface ResidentsProps {
     residents: {
         data: Resident[];
         links: any[];
+    };
+    filters: {
+        search?: string;
     };
     can: {
         create: boolean;
@@ -37,23 +41,25 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Residents({ residents, can }: ResidentsProps) {
+export default function Residents({ residents, filters, can }: ResidentsProps) {
     const { errors } = usePage().props;
-    const [search, setSearch] = useState("");
+    const [search, setSearch] = useState(filters.search || "");
     const [showAddResidentModal, setShowAddResidentModal] = useState(false);
     const [editResident, setEditResident] = useState<Resident | null>(null);
 
-    const handleSearch = debounce((query: string) => {
-        router.get(route('residents.index'), { search: query }, {
-            only: ['residents'],
-            replace: true,
-            preserveState: true,
-        });
-    }, 300);
-
-    const filteredResidents = residents.data.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase())
+    const handleSearch = useMemo(
+        () =>
+            debounce((query: string) => {
+                router.get(route('residents.index'), { search: query || undefined }, {
+                    only: ['residents', 'filters'],
+                    replace: true,
+                    preserveState: true,
+                });
+            }, 300),
+        [],
     );
+
+    useEffect(() => () => handleSearch.cancel(), [handleSearch]);
 
     const handleDelete = (id: number) => {
         if (confirm("Are you sure you want to delete this resident?")) {
@@ -108,13 +114,14 @@ export default function Residents({ residents, can }: ResidentsProps) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Residents" />
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <div className="flex justify-between items-center mb-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-2xl font-bold">Residents</h1>
-                    <div className="flex gap-2">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
                         <Input
                             type="text"
                             placeholder="Search residents..."
                             value={search}
+                            className="w-full sm:w-64"
                             onChange={(e) => {
                                 setSearch(e.target.value);
                                 handleSearch(e.target.value);
@@ -149,6 +156,7 @@ export default function Residents({ residents, can }: ResidentsProps) {
                     </div>
                 ) : (
                     <>
+                        <div className="hidden md:block">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -160,7 +168,7 @@ export default function Residents({ residents, can }: ResidentsProps) {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredResidents.map((resident) => (
+                                {residents.data.map((resident) => (
                                     <TableRow key={resident.id}>
                                         <TableCell>{resident.id}</TableCell>
                                         <TableCell>{resident.name}</TableCell>
@@ -192,6 +200,42 @@ export default function Residents({ residents, can }: ResidentsProps) {
                                 ))}
                             </TableBody>
                         </Table>
+                        </div>
+
+                        <div className="space-y-3 md:hidden">
+                            {residents.data.map((resident) => (
+                                <div key={resident.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <Link href={route('residents.show', resident.id)} className="font-semibold hover:underline">
+                                                {resident.name}
+                                            </Link>
+                                            <p className="mt-1 break-all text-sm text-muted-foreground">{resident.email || 'No email'}</p>
+                                        </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" aria-label={`Actions for ${resident.name}`}>
+                                                    <EllipsisVertical size={18} />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('residents.show', resident.id)}><Eye size={16} className="mr-2" /> View</Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('residents.edit', resident.id)}><Pencil size={16} className="mr-2" /> Edit</Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleDelete(resident.id)}><Trash size={16} className="mr-2" /> Delete</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                                        <p><span className="text-muted-foreground">Phone:</span> {resident.phone || '—'}</p>
+                                        <p className="sm:col-span-2"><span className="text-muted-foreground">Address:</span> {resident.address || '—'}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
 
                         {/* Pagination */}
                         <Pagination links={residents.links} />
@@ -206,7 +250,12 @@ export default function Residents({ residents, can }: ResidentsProps) {
                         setEditResident(null);
                     }}
                     onSubmit={handleAddResident}
-                    initialData={editResident ?? undefined}
+                    initialData={editResident ? {
+                        name: editResident.name,
+                        email: editResident.email ?? '',
+                        phone: editResident.phone ?? '',
+                        address: editResident.address ?? '',
+                    } : undefined}
                 />
             </div>
         </AppLayout>

@@ -77,7 +77,7 @@ class BillingController extends Controller
             $query->where('issued_at', '<=', $toDate);
         }
 
-        $bills = $query->latest('issued_at')->paginate(15);
+        $bills = $query->latest('issued_at')->paginate(15)->withQueryString();
 
         return Inertia::render('billing/billing', [
             'bills' => $bills,

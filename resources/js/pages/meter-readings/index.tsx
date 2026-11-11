@@ -1,7 +1,7 @@
 import { Head, usePage, router, Link } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type BreadcrumbItem, type SharedData } from "@/types";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusCircle, EllipsisVertical, Eye, Pencil, Trash, TrendingUp, Download, Layers } from "lucide-react";
@@ -101,34 +101,40 @@ export default function MeterReadings() {
     const [selectedMeter, setSelectedMeter] = useState<string>(filters.meter_id?.toString() || "");
     const [selectedType, setSelectedType] = useState<string>(filters.reading_type || "");
 
-    const handleSearch = debounce((query: string) => {
-        router.get(route('meter-readings.index'), { 
-            search: query,
-            meter_id: selectedMeter || undefined,
-            reading_type: selectedType || undefined,
-        }, {
-            only: ['readings'],
-            replace: true,
-            preserveState: true,
-        });
-    }, 300);
+    const handleSearch = useMemo(
+        () =>
+            debounce((query: string, meterId: string, readingType: string) => {
+                router.get(route('meter-readings.index'), {
+                    search: query || undefined,
+                    meter_id: meterId || undefined,
+                    reading_type: readingType || undefined,
+                    from_date: filters.from_date,
+                    to_date: filters.to_date,
+                }, {
+                    only: ['readings', 'filters'],
+                    replace: true,
+                    preserveState: true,
+                });
+            }, 300),
+        [filters.from_date, filters.to_date],
+    );
+
+    useEffect(() => () => handleSearch.cancel(), [handleSearch]);
 
     const handleFilterChange = (key: string, value: string) => {
-        const params: any = { search };
-        
-        if (key === 'meter_id') {
-            setSelectedMeter(value);
-            if (value) params.meter_id = value;
-        } else if (key === 'reading_type') {
-            setSelectedType(value);
-            if (value) params.reading_type = value;
-        }
-
-        if (selectedMeter && key !== 'meter_id') params.meter_id = selectedMeter;
-        if (selectedType && key !== 'reading_type') params.reading_type = selectedType;
-
-        router.get(route('meter-readings.index'), params, {
-            only: ['readings'],
+        handleSearch.cancel();
+        const meterId = key === 'meter_id' ? (value === 'all' ? '' : value) : selectedMeter;
+        const readingType = key === 'reading_type' ? (value === 'all' ? '' : value) : selectedType;
+        if (key === 'meter_id') setSelectedMeter(meterId);
+        if (key === 'reading_type') setSelectedType(readingType);
+        router.get(route('meter-readings.index'), {
+            search: search || undefined,
+            meter_id: meterId || undefined,
+            reading_type: readingType || undefined,
+            from_date: filters.from_date,
+            to_date: filters.to_date,
+        }, {
+            only: ['readings', 'filters'],
             replace: true,
             preserveState: true,
         });
@@ -151,8 +157,8 @@ export default function MeterReadings() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Meter Readings" />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <div className="flex justify-between items-center mb-4">
+            <div className="flex h-full min-w-0 flex-1 flex-col gap-4 rounded-xl p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="text-2xl font-bold flex items-center gap-2">
                             <TrendingUp className="h-6 w-6" />
@@ -162,9 +168,10 @@ export default function MeterReadings() {
                             Track and manage water meter readings
                         </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         <Button
                             variant="outline"
+                            className="flex-1 sm:flex-none"
                             onClick={() => router.get(route('meter-readings.export'))}
                         >
                             <Download size={16} className="mr-2" /> Export
@@ -187,26 +194,26 @@ export default function MeterReadings() {
                 </div>
 
                 {/* Filters */}
-                <div className="flex gap-2 mb-4">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row">
                     <Input
                         type="text"
                         placeholder="Search readings..."
                         value={search}
                         onChange={(e) => {
                             setSearch(e.target.value);
-                            handleSearch(e.target.value);
+                            handleSearch(e.target.value, selectedMeter, selectedType);
                         }}
-                        className="max-w-xs"
+                        className="w-full sm:max-w-xs"
                     />
                     <Select
-                        value={selectedMeter}
+                        value={selectedMeter || 'all'}
                         onValueChange={(value) => handleFilterChange('meter_id', value)}
                     >
-                        <SelectTrigger className="w-[200px]">
+                        <SelectTrigger className="w-full sm:w-[200px]">
                             <SelectValue placeholder="All Meters" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="All">All Meters</SelectItem>
+                            <SelectItem value="all">All Meters</SelectItem>
                             {meters.map((meter) => (
                                 <SelectItem key={meter.id} value={meter.id.toString()}>
                                     {meter.meter_number}
@@ -243,6 +250,7 @@ export default function MeterReadings() {
                     </div>
                 ) : (
                     <>
+                        <div className="hidden md:block">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -320,6 +328,46 @@ export default function MeterReadings() {
                                 ))}
                             </TableBody>
                         </Table>
+                        </div>
+
+                        <div className="space-y-3 md:hidden">
+                            {readings.data.map((reading) => (
+                                <div key={reading.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <Link href={route('meters.show', reading.meter_id)} className="font-semibold hover:underline">
+                                                {reading.meter?.meter_number || 'N/A'}
+                                            </Link>
+                                            <p className="mt-1 text-sm text-muted-foreground">{reading.meter?.meter_name}</p>
+                                        </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" aria-label={`Actions for reading ${reading.id}`}>
+                                                    <EllipsisVertical size={18} />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('meter-readings.show', reading.id)}><Eye size={16} className="mr-2" /> View Details</Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('meter-readings.edit', reading.id)}><Pencil size={16} className="mr-2" /> Edit</Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleDelete(reading.id)} className="text-red-600">
+                                                    <Trash size={16} className="mr-2" /> Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                        <p><span className="text-muted-foreground">Date:</span> {new Date(reading.reading_date).toLocaleDateString()}</p>
+                                        <p><span className="text-muted-foreground">Reading:</span> {reading.reading_value} m³</p>
+                                        <p><span className="text-muted-foreground">Consumption:</span> {reading.consumption ?? '—'} m³</p>
+                                        <p><span className="text-muted-foreground">Type:</span> <Badge className={readingTypeClasses[reading.reading_type]}>{reading.reading_type}</Badge></p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
 
                         <Pagination links={readings.links} />
                     </>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreResidentRequest;
 use App\Http\Requests\UpdateResidentRequest;
 use App\Models\Resident;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Str;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -17,13 +18,27 @@ class ResidentController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         // Authorize user to view residents
         $this->authorize('viewAny', Resident::class);
-        
+
+        $search = $request->input('search');
+
         return Inertia::render('residents/residents', [
-            'residents' => Resident::latest()->paginate(10),
+            'residents' => Resident::query()
+                ->when($search, function ($query, $search) {
+                    $query->where(function ($query) use ($search) {
+                        $query->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('phone', 'like', "%{$search}%")
+                            ->orWhere('address', 'like', "%{$search}%");
+                    });
+                })
+                ->latest()
+                ->paginate(10)
+                ->withQueryString(),
+            'filters' => $request->only('search'),
             'can' => [
                 'create' => Auth::user()->can('create', Resident::class),
             ],

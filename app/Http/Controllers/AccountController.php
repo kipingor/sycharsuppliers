@@ -16,9 +16,11 @@ class AccountController extends Controller
     {
         $accounts = Account::query()
             ->when($request->search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%")
-                    ->orWhere('account_number', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                $query->where(function ($query) use ($search) {
+                    $query->where('name', 'like', "%{$search}%")
+                        ->orWhere('account_number', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
             })
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
@@ -26,7 +28,8 @@ class AccountController extends Controller
             ->with('meters:id,account_id,meter_number,status')
             ->withCount(['billings', 'payments'])
             ->latest()
-            ->paginate(20);
+            ->paginate(20)
+            ->withQueryString();
 
         return Inertia::render('accounts/index', [
             'accounts' => $accounts,

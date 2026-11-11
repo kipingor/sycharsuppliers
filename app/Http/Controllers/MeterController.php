@@ -48,15 +48,15 @@ class MeterController extends Controller
             ->with(['account', 'parentMeter'])
             ->when(
                 $request->input('search'),
-                fn ($q, $search) =>
-                $q->where('meter_number', 'like', "%{$search}%")
-                    ->orWhere('meter_name', 'like', "%{$search}%")
-                    ->orWhereHas(
-                        'account',
-                        fn ($a) =>
-                        $a->where('name', 'like', "%{$search}%")
-                            ->orWhere('account_number', 'like', "%{$search}%")
-                    )
+                fn ($q, $search) => $q->where(function ($q) use ($search) {
+                    $q->where('meter_number', 'like', "%{$search}%")
+                        ->orWhere('meter_name', 'like', "%{$search}%")
+                        ->orWhereHas(
+                            'account',
+                            fn ($a) => $a->where('name', 'like', "%{$search}%")
+                                ->orWhere('account_number', 'like', "%{$search}%")
+                        );
+                })
             )
             ->when(
                 $request->input('status'),

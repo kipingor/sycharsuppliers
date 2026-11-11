@@ -4,7 +4,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { type Account, type Meter } from '@/types/models';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface Paginated<T> {
     data: T[];
@@ -54,19 +54,25 @@ export default function Meters() {
         can: Record<string, boolean>;
     }>().props;
 
-    const search = filters.search ?? '';
+    const [search, setSearch] = useState(filters.search ?? '');
 
-    const handleSearch = debounce((value: string) => {
-        router.get(
-            route('meters.index'),
-            { search: value },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-            },
-        );
-    }, 300);
+    const handleSearch = useMemo(
+        () =>
+            debounce((value: string) => {
+                router.get(
+                    route('meters.index'),
+                    { ...filters, search: value },
+                    {
+                        preserveState: true,
+                        preserveScroll: true,
+                        replace: true,
+                    },
+                );
+            }, 300),
+        [filters],
+    );
+
+    useEffect(() => () => handleSearch.cancel(), [handleSearch]);
 
     const handleDelete = (id: number): void => {
         if (confirm('Are you sure you want to delete this meter?')) {
@@ -95,14 +101,18 @@ export default function Meters() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Meters" />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
-                <div className="mb-4 flex items-center justify-between">
+            <div className="flex h-full min-w-0 flex-1 flex-col gap-4 rounded-xl p-4">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-2xl font-bold">Meters</h1>
-                    <div className="flex gap-2">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
                         <Input
                             value={search}
                             placeholder="Search by meter number or resident name..."
-                            onChange={(e) => handleSearch(e.target.value)}
+                            className="w-full sm:w-72"
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                handleSearch(e.target.value);
+                            }}
                         />
                         {can.create && (
                             <Link href={route('meters.create')}>
@@ -127,6 +137,7 @@ export default function Meters() {
                     </div>
                 ) : (
                     <>
+                        <div className="hidden md:block">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -182,6 +193,47 @@ export default function Meters() {
                                 ))}
                             </TableBody>
                         </Table>
+                        </div>
+
+                        <div className="space-y-3 md:hidden">
+                            {meters.data.map((meter) => (
+                                <div key={meter.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <Link href={route('meters.show', meter.id)} className="font-semibold hover:underline">
+                                                {meter.meter_number}
+                                            </Link>
+                                            <p className="mt-1 text-sm text-muted-foreground">{meter.meter_name}</p>
+                                        </div>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" aria-label={`Actions for meter ${meter.meter_number}`}>
+                                                    <EllipsisVertical size={18} />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('meters.show', meter.id)}><Eye size={16} className="mr-2" /> View</Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={route('meters.edit', meter.id)}><Pencil size={16} className="mr-2" /> Edit</Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleDelete(meter.id)}><Trash size={16} className="mr-2" /> Delete</DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                                        <span className="text-muted-foreground">
+                                            {meter.account?.name || 'N/A'}
+                                            {meter.account?.account_number && ` (${meter.account.account_number})`}
+                                        </span>
+                                        <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ${statusClasses[meter.status ?? 'active'] || statusClasses.active}`}>
+                                            {meter.status ?? 'active'}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
 
                         {/* Pagination */}
                         <Pagination links={meters.links} />
