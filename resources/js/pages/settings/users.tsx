@@ -21,6 +21,7 @@ interface User {
   id: number;
   name: string;
   email: string;
+  company_email: string | null;
   status: string;
   roles: string[];
   permissions: string[];
@@ -31,9 +32,10 @@ interface Props {
   users: User[];
   roles: string[];
   permissions: string[];
+  companyEmailDomain: string;
 }
 
-export default function UserManagement({ users, roles, permissions }: Props) {
+export default function UserManagement({ users, roles, permissions, companyEmailDomain }: Props) {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -41,6 +43,7 @@ export default function UserManagement({ users, roles, permissions }: Props) {
   const { data, setData, post, patch, delete: destroy, processing, errors, reset } = useForm({
     name: '',
     email: '',
+    company_email: '',
     password: '',
     password_confirmation: '',
     roles: [] as string[],
@@ -49,7 +52,8 @@ export default function UserManagement({ users, roles, permissions }: Props) {
 
   const filteredUsers = users.filter((user) =>
     user.name.toLowerCase().includes(search.toLowerCase()) ||
-    user.email.toLowerCase().includes(search.toLowerCase())
+    user.email.toLowerCase().includes(search.toLowerCase()) ||
+    (user.company_email || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const openCreateModal = () => {
@@ -63,6 +67,7 @@ export default function UserManagement({ users, roles, permissions }: Props) {
     setData({
       name: user.name,
       email: user.email,
+      company_email: user.company_email || '',
       password: '',
       password_confirmation: '',
       roles: user.roles,
@@ -139,6 +144,7 @@ export default function UserManagement({ users, roles, permissions }: Props) {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Company email</TableHead>
                 <TableHead>Roles</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
@@ -157,6 +163,7 @@ export default function UserManagement({ users, roles, permissions }: Props) {
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
+                    <TableCell>{user.company_email || 'Not set'}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {user.roles && user.roles.length > 0 ? (
@@ -234,6 +241,22 @@ export default function UserManagement({ users, roles, permissions }: Props) {
                   className="mt-1"
                 />
                 {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
+              </div>
+
+              <div>
+                <Label htmlFor="company_email">Company email address</Label>
+                <Input
+                  id="company_email"
+                  type="email"
+                  value={data.company_email}
+                  onChange={(e) => setData('company_email', e.target.value)}
+                  placeholder={`firstname.lastname@${companyEmailDomain}`}
+                  className="mt-1"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Leave blank when creating a user to generate an address from their name. This is separate from their login email.
+                </p>
+                {errors.company_email && <p className="mt-1 text-sm text-red-600">{errors.company_email}</p>}
               </div>
 
               {/* Password */}

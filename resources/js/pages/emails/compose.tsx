@@ -24,6 +24,12 @@ interface ReplyTo {
     from_name?: string | null;
     subject: string;
     message_id?: string | null;
+    from_address: string;
+}
+
+interface SenderAddress {
+    email: string;
+    label: string;
 }
 
 interface ComposeProps {
@@ -33,6 +39,7 @@ interface ComposeProps {
     initialMode: 'single' | 'overdue_reminder_individual';
     overdueAccountsCount: number;
     activeAccountsCount: number;
+    senderAddresses: SenderAddress[];
 }
 
 const overdueTemplate = {
@@ -63,7 +70,7 @@ const announcementTemplates = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ComposeEmail() {
-    const { accounts, preAccount, replyTo, initialMode, overdueAccountsCount, activeAccountsCount } = usePage<SharedData & ComposeProps>().props;
+    const { accounts, preAccount, replyTo, initialMode, overdueAccountsCount, activeAccountsCount, senderAddresses } = usePage<SharedData & ComposeProps>().props;
 
     const isReply = !!replyTo;
     const [mode, setMode] = useState<'single' | 'overdue_reminder' | 'overdue_reminder_individual' | 'announcement'>(initialMode);
@@ -86,6 +93,7 @@ export default function ComposeEmail() {
         body: initialMode === 'overdue_reminder_individual' ? overdueTemplate.body : '',
         account_id: preAccount?.id ? String(preAccount.id) : '',
         in_reply_to: replyTo?.message_id || '',
+        from_email: replyTo?.from_address || senderAddresses[0]?.email || '',
         campaign: '',
     });
 
@@ -187,6 +195,22 @@ export default function ComposeEmail() {
                         </CardHeader>
                         <CardContent className="px-6 pb-6">
                             <form onSubmit={handleSubmit} className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="from_email">From</Label>
+                                    <select
+                                        id="from_email"
+                                        value={data.from_email}
+                                        onChange={(e) => setData('from_email', e.target.value)}
+                                        disabled={isReply}
+                                        className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                                    >
+                                        {senderAddresses.map((sender) => (
+                                            <option key={sender.email} value={sender.email}>{sender.label}</option>
+                                        ))}
+                                    </select>
+                                    {errors.from_email && <p className="text-destructive text-xs">{errors.from_email}</p>}
+                                </div>
+
                                 {!isReply && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="email-mode">Email type</Label>

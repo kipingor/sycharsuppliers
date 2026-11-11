@@ -47,6 +47,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/send',             [EmailLogController::class, 'send'])->name('send');
         Route::post('/send-bulk',        [EmailLogController::class, 'sendBulk'])->name('send-bulk');
         Route::post('/send-overdue',     [EmailLogController::class, 'sendOverdue'])->name('send-overdue');
+        Route::post('/{emailLog}/claim', [EmailLogController::class, 'claim'])->name('claim');
         Route::get('/{emailLog}',        [EmailLogController::class, 'show'])->name('show');
         Route::get('/{emailLog}/reply',  [EmailLogController::class, 'reply'])->name('reply');
         Route::post('/{emailLog}/read',  [EmailLogController::class, 'markRead'])->name('mark-read');

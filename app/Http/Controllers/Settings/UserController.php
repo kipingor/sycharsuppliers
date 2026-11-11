@@ -31,6 +31,7 @@ class UserController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'company_email' => $user->company_email,
                     'status' => $user->email_verified_at ? 'Active' : 'Pending',
                     'roles' => $user->roles->pluck('name')->toArray(),
                     'permissions' => $user->permissions->pluck('name')->toArray(),
@@ -38,6 +39,7 @@ class UserController extends Controller
                 ]),
             'roles' => Role::all()->pluck('name')->toArray(),
             'permissions' => Permission::all()->pluck('name')->toArray(),
+            'companyEmailDomain' => config('mail.company_domain'),
         ]);
     }
 
@@ -47,10 +49,21 @@ class UserController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $this->authorize('create', User::class);
+        if ($request->filled('company_email')) {
+            $request->merge(['company_email' => strtolower(trim($request->input('company_email')))]);
+        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            'company_email' => [
+                'nullable',
+                'string',
+                'email',
+                'ends_with:@' . config('mail.company_domain'),
+                'max:255',
+                'unique:users,company_email',
+            ],
             'password' => ['required', 'confirmed', Password::defaults()],
             'roles' => ['nullable', 'array'],
             'roles.*' => ['string', 'exists:roles,name'],
@@ -58,9 +71,14 @@ class UserController extends Controller
             'permissions.*' => ['string', 'exists:permissions,name'],
         ]);
 
+        $companyEmail = $validated['company_email']
+            ? strtolower($validated['company_email'])
+            : User::generateCompanyEmail($validated['name']);
+
         $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'company_email' => $companyEmail,
             'password' => Hash::make($validated['password']),
         ]);
 
@@ -84,10 +102,21 @@ class UserController extends Controller
     public function update(Request $request, User $user): RedirectResponse
     {
         $this->authorize('update', $user);
+        if ($request->filled('company_email')) {
+            $request->merge(['company_email' => strtolower(trim($request->input('company_email')))]);
+        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'company_email' => [
+                'nullable',
+                'string',
+                'email',
+                'ends_with:@' . config('mail.company_domain'),
+                'max:255',
+                'unique:users,company_email,' . $user->id,
+            ],
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'roles' => ['nullable', 'array'],
             'roles.*' => ['string', 'exists:roles,name'],
@@ -98,6 +127,9 @@ class UserController extends Controller
         $user->update([
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'company_email' => isset($validated['company_email'])
+                ? strtolower($validated['company_email'])
+                : $user->company_email,
         ]);
 
         // Update password if provided

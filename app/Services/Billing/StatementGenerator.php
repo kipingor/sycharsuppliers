@@ -3,14 +3,17 @@
 namespace App\Services\Billing;
 
 use App\Models\Billing;
+use App\Models\EmailLog;
+use App\Services\EmailService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
 use App\Models\Account;
 
 class StatementGenerator
 {
+    public function __construct(private EmailService $emailService) {}
+
     /**
      * Generate a PDF bill statement and return the DomPDF instance.
      *
@@ -27,7 +30,7 @@ class StatementGenerator
     }
 
 
-    public function sendBillStatement(Billing $billing, string $email): void
+    public function sendBillStatement(Billing $billing, string $email): EmailLog
     {
         // Load relations FIRST — before prepareBillStatementData so everything is available
         $data = $this->prepareBillStatementData($billing);
@@ -36,7 +39,26 @@ class StatementGenerator
             ->setPaper('a4', 'portrait')
             ->setOption('defaultFont', 'sans-serif');
 
-        Mail::to($email)->send(new \App\Mail\BillingStatement($pdf->output(), $billing));
+        $pdfContent = $pdf->output();
+        $mailable = new \App\Mail\BillingStatement($pdfContent, $billing);
+        $subject = "Bill Statement #{$billing->id} — {$billing->getFormattedPeriod()}";
+
+        return $this->emailService->sendMailable(
+            $email,
+            $subject,
+            "<p>Bill statement for {$billing->getFormattedPeriod()} is attached.</p>",
+            $mailable,
+            [
+                'account_id' => $billing->account_id,
+                'billing_id' => $billing->id,
+                'name' => $billing->account?->name,
+                'attachments' => [[
+                    'name' => "bill_statement_{$billing->id}.pdf",
+                    'mime' => 'application/pdf',
+                    'size' => strlen($pdfContent),
+                ]],
+            ],
+        );
     }
 
     /**

@@ -14,7 +14,7 @@ class EmailLogPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('admin');
+        return true;
     }
 
     /**
@@ -22,7 +22,17 @@ class EmailLogPolicy
      */
     public function view(User $user, EmailLog $emailLog): bool
     {
-        return $user->hasRole('admin');
+        if ($user->hasRole('admin') || $emailLog->sender_user_id === $user->id) {
+            return true;
+        }
+
+        $addresses = array_filter([
+            strtolower((string) $user->company_email),
+            ...array_map('strtolower', config('mail.shared_addresses', [])),
+        ]);
+
+        return in_array(strtolower((string) $emailLog->from_email), $addresses, true)
+            || in_array(strtolower((string) $emailLog->recipient_email), $addresses, true);
     }
 
     /**
@@ -30,7 +40,7 @@ class EmailLogPolicy
      */
     public function create(User $user): bool
     {
-        return $user->hasRole('admin');
+        return true;
     }
 
     /**
@@ -38,7 +48,7 @@ class EmailLogPolicy
      */
     public function update(User $user, EmailLog $emailLog): bool
     {
-        return $user->hasRole('admin');
+        return $this->view($user, $emailLog);
     }
 
     /**

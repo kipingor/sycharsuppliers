@@ -118,6 +118,12 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Sychar Suppliers'),
     ],
 
+    'company_domain' => env('MAIL_COMPANY_DOMAIN', 'sycharsuppliers.com'),
+    'shared_addresses' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', env('MAIL_SHARED_ADDRESSES', 'sales@sycharsuppliers.com'))
+    ))),
+
     /*
     |--------------------------------------------------------------------------
     | Resend Configuration for Bounce & Complaint Handling

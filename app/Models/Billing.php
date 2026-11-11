@@ -143,6 +143,11 @@ class Billing extends Model implements Auditable
         return $this->hasMany(CreditNote::class);
     }
 
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(EmailLog::class);
+    }
+
     /* =========================
      | Scopes
      |========================= */

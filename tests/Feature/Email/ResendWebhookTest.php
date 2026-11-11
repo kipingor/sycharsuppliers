@@ -4,6 +4,7 @@ namespace Tests\Feature\Email;
 
 use App\Models\Account;
 use App\Models\EmailLog;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Resend\Contracts\Client as ResendClient;
 use Tests\TestCase;
@@ -72,6 +73,37 @@ class ResendWebhookTest extends TestCase
         ]);
     }
 
+    public function test_received_message_routes_to_a_known_shared_address(): void
+    {
+        config(['mail.shared_addresses' => ['sales@sycharsuppliers.com']]);
+        User::factory()->create(['company_email' => 'jane.doe@sycharsuppliers.com']);
+        $details = (object) [
+            'from' => 'Customer <customer@example.com>',
+            'to' => ['jane.doe@sycharsuppliers.com', 'sales@sycharsuppliers.com'],
+            'subject' => 'Shared inbox request',
+            'text' => 'Please help.',
+            'message_id' => '<shared-123@example.test>',
+            'headers' => [],
+            'attachments' => [],
+        ];
+        $this->app->instance(ResendClient::class, $this->fakeResendClient($details));
+
+        $payload = [
+            'type' => 'email.received',
+            'created_at' => now()->toIso8601String(),
+            'data' => ['email_id' => 'rx_shared', 'to' => $details->to],
+        ];
+
+        $this->withHeaders($this->signedHeaders($payload))
+            ->postJson('/api/webhooks/resend', $payload)
+            ->assertOk();
+
+        $this->assertDatabaseHas('email_logs', [
+            'provider_id' => 'rx_shared',
+            'recipient_email' => 'sales@sycharsuppliers.com',
+        ]);
+    }
+
     public function test_delivery_webhook_updates_the_matching_outbound_email_log(): void
     {
         $log = EmailLog::create([
@@ -105,6 +137,66 @@ class ResendWebhookTest extends TestCase
 
         $this->assertSame(EmailLog::STATUS_DELIVERED, $log->status);
         $this->assertNotNull($log->delivered_at);
+    }
+
+    public function test_delayed_and_out_of_order_events_do_not_regress_delivery_status(): void
+    {
+        $log = EmailLog::create([
+            'direction' => 'outbound',
+            'from_email' => 'billing@sycharsuppliers.com',
+            'recipient_email' => 'customer@example.com',
+            'subject' => 'Statement ready',
+            'body' => '<p>Attached</p>',
+            'status' => EmailLog::STATUS_SENT,
+            'provider_id' => 're_789',
+            'sent_at' => now()->subMinutes(3),
+        ]);
+
+        $this->postWebhookEvent('email.delivered', 're_789', now()->subMinute());
+        $this->postWebhookEvent('email.failed', 're_789', now()->subSeconds(30));
+        $this->postWebhookEvent('email.delivery_delayed', 're_789', now());
+        $this->postWebhookEvent('email.sent', 're_789', now()->subMinutes(2));
+
+        $log->refresh();
+
+        $this->assertSame(EmailLog::STATUS_DELIVERED, $log->status);
+        $this->assertNotNull($log->delivered_at);
+    }
+
+    public function test_provider_id_prevents_events_from_matching_a_different_email_with_same_subject(): void
+    {
+        $log = EmailLog::create([
+            'direction' => 'outbound',
+            'from_email' => 'billing@sycharsuppliers.com',
+            'recipient_email' => 'customer@example.com',
+            'subject' => 'Statement ready',
+            'body' => '<p>Attached</p>',
+            'status' => EmailLog::STATUS_SENT,
+            'provider_id' => 're_existing',
+            'sent_at' => now(),
+        ]);
+
+        $this->postWebhookEvent('email.delivered', 're_unknown', now());
+
+        $this->assertSame(EmailLog::STATUS_SENT, $log->fresh()->status);
+        $this->assertNull($log->fresh()->delivered_at);
+    }
+
+    private function postWebhookEvent(string $type, string $providerId, \Illuminate\Support\Carbon $createdAt): void
+    {
+        $payload = [
+            'type' => $type,
+            'created_at' => $createdAt->toIso8601String(),
+            'data' => [
+                'email_id' => $providerId,
+                'to' => ['customer@example.com'],
+                'subject' => 'Statement ready',
+            ],
+        ];
+
+        $this->withHeaders($this->signedHeaders($payload))
+            ->postJson('/api/webhooks/resend', $payload)
+            ->assertOk();
     }
 
     private function fakeResendClient(object $details): ResendClient

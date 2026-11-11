@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateBillingRequest;
 use App\Http\Requests\GenerateBillRequest;
 use App\Models\Billing;
 use App\Models\Account;
+use App\Models\EmailLog;
 use App\Models\Meter;
 use App\Services\Billing\BillingService;
 use App\Services\Billing\BillingOrchestrator;
@@ -169,6 +170,7 @@ class BillingController extends Controller
             'allocations.payment',
             'creditNotes.createdBy',
             'creditNotes.previousAccount',
+            'emailLogs' => fn ($query) => $query->outbound()->latest(),
             'audits' => function ($query) {
                 $query->latest()->limit(20);
             }
@@ -189,6 +191,16 @@ class BillingController extends Controller
 
                 // Relationships - explicitly map
                 'account' => $billing->account,
+                'email_logs' => $billing->emailLogs->map(fn ($email) => [
+                    'id' => $email->id,
+                    'recipient_email' => $email->recipient_email,
+                    'subject' => $email->subject,
+                    'status' => $email->status,
+                    'error_message' => $email->error_message,
+                    'sent_at' => $email->sent_at,
+                    'delivered_at' => $email->delivered_at,
+                    'created_at' => $email->created_at,
+                ]),
                 'details' => $billing->details->map(function ($detail) {
                     return [
                         'id' => $detail->id,
@@ -461,9 +473,13 @@ class BillingController extends Controller
                 return back()->with('error', 'No email address available for this account');
             }
 
-            $this->statementGenerator->sendBillStatement($billing, $email);
+            $emailLog = $this->statementGenerator->sendBillStatement($billing, $email);
 
-            return back()->with('success', 'Statement sent successfully to ' . $email);
+            if ($emailLog->status === EmailLog::STATUS_FAILED) {
+                return back()->with('error', 'Email failed to send: ' . $emailLog->error_message);
+            }
+
+            return back()->with('success', 'Bill email sent to ' . $email . '. Delivery status will update when confirmed by the email provider.');
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to send statement: ' . $e->getMessage());
         }

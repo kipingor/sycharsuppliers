@@ -10,6 +10,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,12 +30,28 @@ class EmailLogController extends Controller
         $this->authorize('viewAny', EmailLog::class);
 
         $tab       = $request->input('tab', 'inbox'); // inbox | sent
+        abort_unless(in_array($tab, ['inbox', 'sent'], true), 422);
         $search    = $request->input('search', '');
         $accountId = $request->input('account_id');
 
         $query = $tab === 'inbox'
             ? EmailLog::inbound()->with('account:id,name,account_number')
             : EmailLog::outbound()->with('account:id,name,account_number');
+
+        if (!Auth::user()->hasRole('admin')) {
+            $userAddress = strtolower((string) Auth::user()->company_email);
+            $sharedAddresses = array_map('strtolower', config('mail.shared_addresses', []));
+            $visibleAddresses = array_values(array_filter([$userAddress, ...$sharedAddresses]));
+
+            if ($tab === 'inbox') {
+                $query->whereIn('recipient_email', $visibleAddresses);
+            } else {
+                $query->where(function ($sent) use ($visibleAddresses) {
+                    $sent->where('sender_user_id', Auth::id())
+                        ->orWhereIn('from_email', $visibleAddresses);
+                });
+            }
+        }
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -49,7 +66,14 @@ class EmailLogController extends Controller
         }
 
         $emails      = $query->latest()->paginate(25)->withQueryString();
-        $unreadCount = EmailLog::unread()->count();
+        $unreadQuery = EmailLog::unread()->inbound();
+        if (!Auth::user()->hasRole('admin')) {
+            $unreadQuery->whereIn('recipient_email', array_values(array_filter([
+                strtolower((string) Auth::user()->company_email),
+                ...array_map('strtolower', config('mail.shared_addresses', [])),
+            ])));
+        }
+        $unreadCount = $unreadQuery->count();
 
         $accounts = Account::whereHas('emailLogs')
             ->select('id', 'name', 'account_number')
@@ -78,6 +102,11 @@ class EmailLogController extends Controller
         }
 
         $emailLog->load('account:id,name,account_number,email,phone');
+        $root = $emailLog->conversationRoot();
+        $root->loadMissing('claimant:id,name');
+        $isSharedConversation = $this->isSharedConversation($root);
+        $canReply = Auth::user()->can('create', EmailLog::class)
+            && (!$isSharedConversation || $root->claimed_by === Auth::id());
 
         $thread = $emailLog->threadEmails()->map(fn($e) => [
             'id'              => $e->id,
@@ -92,14 +121,22 @@ class EmailLogController extends Controller
             'message_id'      => $e->message_id,
             'created_at'      => $e->created_at,
             'read_at'         => $e->read_at,
+            'sender_user_id'  => $e->sender_user_id,
         ]);
 
         return Inertia::render('emails/show', [
             'email'  => $emailLog,
             'thread' => $thread,
             'can'    => [
-                'reply'  => Auth::user()->can('create', EmailLog::class),
+                'reply'  => $canReply,
                 'delete' => Auth::user()->can('delete', $emailLog),
+                'claim'  => $isSharedConversation && !$root->claimed_by,
+                'canReply' => $canReply,
+            ],
+            'conversation' => [
+                'is_shared' => $isSharedConversation,
+                'claimed_by' => $root->claimant?->name,
+                'claimed_by_me' => $root->claimed_by === Auth::id(),
             ],
         ]);
     }
@@ -145,6 +182,7 @@ class EmailLogController extends Controller
             'initialMode'            => $initialMode,
             'overdueAccountsCount'   => $overdueAccountsCount,
             'activeAccountsCount'    => $activeAccountsCount,
+            'senderAddresses'        => $this->senderAddresses(),
         ]);
     }
 
@@ -153,6 +191,10 @@ class EmailLogController extends Controller
     public function reply(EmailLog $emailLog): Response
     {
         $this->authorize('create', EmailLog::class);
+        $this->authorize('view', $emailLog);
+        abort_unless($emailLog->isInbound(), 404);
+        $root = $emailLog->conversationRoot();
+        $this->ensureReplyClaim($root);
 
         $accounts = Account::whereNotNull('email')
             ->where('email', '!=', '')
@@ -169,11 +211,37 @@ class EmailLogController extends Controller
                 'from_name'  => $emailLog->from_name,
                 'subject'    => $emailLog->subject,
                 'message_id' => $emailLog->message_id,
+                'from_address' => $emailLog->recipient_email,
             ],
             'initialMode' => 'single',
             'overdueAccountsCount' => 0,
             'activeAccountsCount'  => 0,
+            'senderAddresses' => $this->senderAddresses(),
         ]);
+    }
+
+    public function claim(EmailLog $emailLog): RedirectResponse
+    {
+        $this->authorize('view', $emailLog);
+        $root = $emailLog->conversationRoot();
+        abort_unless($this->isSharedConversation($root), 404);
+
+        $claimed = DB::transaction(function () use ($root) {
+            $lockedRoot = EmailLog::whereKey($root->id)->lockForUpdate()->firstOrFail();
+            if ($lockedRoot->claimed_by && $lockedRoot->claimed_by !== Auth::id()) {
+                return false;
+            }
+            if (!$lockedRoot->claimed_by) {
+                $lockedRoot->update(['claimed_by' => Auth::id(), 'claimed_at' => now()]);
+            }
+
+            return true;
+        });
+
+        return back()->with(
+            $claimed ? 'success' : 'error',
+            $claimed ? 'You claimed this conversation.' : 'This conversation has already been claimed by another user.'
+        );
     }
 
     // ─── Send ─────────────────────────────────────────────────────────────
@@ -188,7 +256,25 @@ class EmailLogController extends Controller
             'body'        => 'required|string',
             'account_id'  => 'nullable|exists:accounts,id',
             'in_reply_to' => 'nullable|string|max:255',
+            'from_email' => 'required|email',
         ]);
+
+        $senderAddresses = array_column($this->senderAddresses(), 'email');
+        abort_unless(in_array(strtolower($data['from_email']), $senderAddresses, true), 403);
+        $parent = !empty($data['in_reply_to'])
+            ? EmailLog::where('message_id', $data['in_reply_to'])->first()
+            : null;
+        if (!empty($data['in_reply_to'])) {
+            abort_unless($parent && $parent->isInbound(), 422, 'The message being replied to could not be found.');
+            $this->authorize('view', $parent);
+            $root = $parent->conversationRoot();
+            $this->ensureReplyClaim($root);
+            abort_unless(
+                strtolower((string) $parent->recipient_email) === strtolower($data['from_email']),
+                403,
+                'Replies must be sent from the address that received the original message.'
+            );
+        }
 
         $log = $this->emailService->send(
             $data['to'],
@@ -197,6 +283,9 @@ class EmailLogController extends Controller
             array_filter([
                 'account_id'  => $data['account_id']  ?? null,
                 'in_reply_to' => $data['in_reply_to'] ?? null,
+                'from_address' => strtolower($data['from_email']),
+                'sender_user_id' => Auth::id(),
+                'thread_id' => $parent?->conversationRoot()->id,
             ])
         );
 
@@ -212,6 +301,7 @@ class EmailLogController extends Controller
     public function sendOverdue(Request $request): RedirectResponse
     {
         $this->authorize('create', EmailLog::class);
+        abort_unless(Auth::user()->hasRole('admin'), 403);
 
         $data = $request->validate([
             'account_id' => 'required|exists:accounts,id',
@@ -238,6 +328,7 @@ class EmailLogController extends Controller
     public function sendBulk(Request $request): RedirectResponse
     {
         $this->authorize('create', EmailLog::class);
+        abort_unless(Auth::user()->hasRole('admin'), 403);
 
         $data = $request->validate([
             'campaign' => 'required|in:overdue_reminder,announcement',
@@ -361,5 +452,42 @@ class EmailLogController extends Controller
         $emailLog->delete();
         return redirect()->route('emails.index')
             ->with('success', 'Email deleted from logs.');
+    }
+
+    private function senderAddresses(): array
+    {
+        $addresses = [];
+        $user = Auth::user();
+
+        if ($user->company_email) {
+            $addresses[] = [
+                'email' => strtolower($user->company_email),
+                'label' => "{$user->name} <{$user->company_email}>",
+            ];
+        }
+
+        foreach (config('mail.shared_addresses', []) as $address) {
+            $address = strtolower($address);
+            $addresses[] = ['email' => $address, 'label' => $address . ' (shared)'];
+        }
+
+        return $addresses;
+    }
+
+    private function ensureReplyClaim(EmailLog $root): void
+    {
+        if ($this->isSharedConversation($root) && $root->claimed_by !== Auth::id()) {
+            abort(403, $root->claimed_by
+                ? 'This shared conversation is claimed by another user.'
+                : 'Claim this shared conversation before replying.');
+        }
+    }
+
+    private function isSharedConversation(EmailLog $emailLog): bool
+    {
+        $sharedAddresses = array_map('strtolower', config('mail.shared_addresses', []));
+
+        return in_array(strtolower((string) $emailLog->recipient_email), $sharedAddresses, true)
+            || in_array(strtolower((string) $emailLog->from_email), $sharedAddresses, true);
     }
 }
