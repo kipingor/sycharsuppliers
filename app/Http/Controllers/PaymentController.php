@@ -44,6 +44,7 @@ class PaymentController extends Controller
         $this->authorize('viewAny', Payment::class);
 
         $query = Payment::with(['account', 'allocations.billing'])
+            ->withCount('allocations')
             ->latest('payment_date');
 
         // Apply filters
@@ -96,7 +97,7 @@ class PaymentController extends Controller
         return Inertia::render('payments/create', [
             'accounts' => Account::active()
                 ->with(['billings' => function ($q) {
-                    $q->whereNotIn('status', ['paid','voided']);
+                    $q->whereNotIn('status', ['paid', 'voided', 'written_off']);
                 }])
                 ->get()
                 ->map(fn ($acc) => [

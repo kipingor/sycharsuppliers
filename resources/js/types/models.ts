@@ -60,7 +60,7 @@ export interface Bill {
     total_amount: number;
     amount_paid?: number;
     amount_due?: number;
-    status: 'pending' | 'paid' | 'overdue' | 'partially_paid' | 'voided';
+    status: 'pending' | 'paid' | 'overdue' | 'partially_paid' | 'voided' | 'written_off';
     account?: Account;
     meter?: Meter;
     details?: BillingDetail[];

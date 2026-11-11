@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Contracts\Auditable;
 
-class CreditNote extends Model
+class CreditNote extends Model implements Auditable
 {
+    use \OwenIt\Auditing\Auditable;
+
     protected $fillable = [
         'billing_id',
         'previous_account_id',
@@ -24,6 +27,17 @@ class CreditNote extends Model
     protected $casts = [
         'amount'    => 'decimal:2',
         'voided_at' => 'datetime',
+    ];
+
+    protected $auditInclude = [
+        'billing_id',
+        'reference',
+        'type',
+        'amount',
+        'reason',
+        'status',
+        'void_reason',
+        'voided_at',
     ];
 
     // ── Relationships ──────────────────────────────────────────────────────────
@@ -68,6 +82,7 @@ class CreditNote extends Model
             'previous_resident_debt' => 'Previous Resident Debt',
             'billing_error'          => 'Billing Error',
             'goodwill'               => 'Goodwill Adjustment',
+            'bad_debt_writeoff'      => 'Bad Debt Write-off',
             'other'                  => 'Other',
         ];
     }

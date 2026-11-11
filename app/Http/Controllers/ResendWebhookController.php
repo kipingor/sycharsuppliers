@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmailLog;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Resend\Contracts\Client as ResendClient;
 use Resend\WebhookSignature;
@@ -54,7 +56,7 @@ class ResendWebhookController extends Controller
         $from = $details['from'] ?? $data['from'] ?? '';
         [$fromName, $fromEmail] = $this->parseAddress($from);
 
-        $recipient = $this->firstRecipient($details['to'] ?? $data['to'] ?? []);
+        $recipient = $this->appRecipient($details['to'] ?? $data['to'] ?? []);
         $subject = $details['subject'] ?? $data['subject'] ?? '(no subject)';
         $messageId = $this->cleanMessageId($details['message_id'] ?? $data['message_id'] ?? null);
         $headers = $details['headers'] ?? $data['headers'] ?? [];
@@ -64,7 +66,12 @@ class ResendWebhookController extends Controller
             $details['text'] ?? $data['text'] ?? null
         );
 
-        EmailLog::create([
+        $parent = $inReplyTo
+            ? EmailLog::where('message_id', $inReplyTo)->first()
+            : null;
+        $threadId = $parent ? ($parent->thread_id ?? $parent->id) : null;
+
+        $emailLog = EmailLog::create([
             'direction'       => 'inbound',
             'from_email'      => $fromEmail,
             'from_name'       => $fromName ?: null,
@@ -76,9 +83,13 @@ class ResendWebhookController extends Controller
             'message_id'      => $messageId,
             'provider_id'     => $providerId,
             'in_reply_to'     => $inReplyTo,
+            'thread_id'       => $threadId,
             'attachments'     => $this->mapAttachments($details['attachments'] ?? $data['attachments'] ?? []),
             'raw_payload'     => $payload,
         ]);
+        if (!$threadId) {
+            $emailLog->update(['thread_id' => $emailLog->id]);
+        }
 
         return response()->json(['status' => 'ok'], 200);
     }
@@ -89,7 +100,8 @@ class ResendWebhookController extends Controller
         $providerId = $this->getProviderId($data);
         $recipient = $this->firstRecipient($data['to'] ?? []);
         $messageId = $this->cleanMessageId($data['message_id'] ?? null);
-        $log = $this->findOutboundLog($providerId, $recipient, $data['subject'] ?? null, $messageId);
+        $eventAt = isset($payload['created_at']) ? Carbon::parse($payload['created_at']) : now();
+        $log = $this->findOutboundLog($providerId, $recipient, $data['subject'] ?? null, $messageId, $eventAt);
 
         if (!$log) {
             Log::info('Resend event for untracked message', [
@@ -102,7 +114,7 @@ class ResendWebhookController extends Controller
             return response()->json(['status' => 'ok'], 200);
         }
 
-        $this->applyOutboundEvent($log, $payload['type'], $data);
+        $this->applyOutboundEvent($log, $payload);
 
         return response()->json(['status' => 'ok'], 200);
     }
@@ -173,7 +185,13 @@ class ResendWebhookController extends Controller
         }
     }
 
-    private function findOutboundLog(?string $providerId, ?string $recipient, ?string $subject, ?string $messageId = null): ?EmailLog
+    private function findOutboundLog(
+        ?string $providerId,
+        ?string $recipient,
+        ?string $subject,
+        ?string $messageId,
+        Carbon $eventAt,
+    ): ?EmailLog
     {
         if ($providerId) {
             $log = EmailLog::outbound()->where('provider_id', $providerId)->first();
@@ -182,65 +200,121 @@ class ResendWebhookController extends Controller
             }
         }
 
-        if ($recipient && $subject) {
-            $log = EmailLog::outbound()
-                ->where('recipient_email', $recipient)
-                ->where('subject', $subject)
-                ->latest()
-                ->first();
-
+        if ($messageId) {
+            $log = EmailLog::outbound()->where('message_id', $messageId)->first();
             if ($log) {
                 return $log;
             }
         }
 
-        if ($messageId) {
-            return EmailLog::outbound()->where('message_id', $messageId)->first();
+        if (!$recipient || !$subject) {
+            return null;
         }
 
-        return null;
+        $candidates = EmailLog::outbound()
+            ->whereNull('provider_id')
+            ->where('recipient_email', $recipient)
+            ->where('subject', $subject)
+            ->whereIn('status', [EmailLog::STATUS_QUEUED, EmailLog::STATUS_SENT, EmailLog::STATUS_FAILED])
+            ->whereBetween('created_at', [$eventAt->copy()->subMinutes(15), $eventAt->copy()->addMinute()])
+            ->limit(2)
+            ->get();
+
+        return $candidates->count() === 1 ? $candidates->first() : null;
     }
 
-    private function applyOutboundEvent(EmailLog $log, string $type, array $data): void
+    private function applyOutboundEvent(EmailLog $log, array $payload): void
     {
+        $type = $payload['type'];
+        $data = $payload['data'];
+        $eventAt = isset($payload['created_at']) ? Carbon::parse($payload['created_at']) : now();
+        $previousEventAt = data_get($log->raw_payload, 'created_at');
+
+        if ($previousEventAt && Carbon::parse($previousEventAt)->greaterThan($eventAt)) {
+            return;
+        }
+
+        $nextStatus = match ($type) {
+            'email.sent' => EmailLog::STATUS_SENT,
+            'email.delivered' => EmailLog::STATUS_DELIVERED,
+            'email.delivery_delayed' => EmailLog::STATUS_QUEUED,
+            'email.opened' => EmailLog::STATUS_OPENED,
+            'email.clicked' => EmailLog::STATUS_CLICKED,
+            'email.bounced' => EmailLog::STATUS_BOUNCED,
+            'email.failed' => EmailLog::STATUS_FAILED,
+            'email.complained' => EmailLog::STATUS_COMPLAINED,
+            default => $log->status,
+        };
+
+        if ($this->statusRank($nextStatus) < $this->statusRank($log->status)) {
+            $nextStatus = $log->status;
+        }
+
         $base = [
-            'provider_id' => $data['email_id'] ?? $log->provider_id,
-            'raw_payload' => $data + ['type' => $type],
+            'provider_id' => $this->getProviderId($data) ?? $log->provider_id,
+            'raw_payload' => $payload,
+            'status' => $nextStatus,
         ];
+
+        if (
+            $this->statusRank($nextStatus) > $this->statusRank($log->status)
+            && in_array($nextStatus, [
+                EmailLog::STATUS_SENT,
+                EmailLog::STATUS_DELIVERED,
+                EmailLog::STATUS_OPENED,
+                EmailLog::STATUS_CLICKED,
+            ], true)
+        ) {
+            $base['error_message'] = null;
+        }
 
         match ($type) {
             'email.sent' => $log->update($base + [
-                'status' => EmailLog::STATUS_SENT,
-                'sent_at' => $log->sent_at ?? now(),
+                'sent_at' => $log->sent_at ?? $eventAt,
             ]),
             'email.delivered' => $log->update($base + [
-                'status' => EmailLog::STATUS_DELIVERED,
-                'delivered_at' => $log->delivered_at ?? now(),
+                'delivered_at' => $log->delivered_at ?? $eventAt,
             ]),
-            'email.delivery_delayed' => $log->update($base + [
-                'status' => EmailLog::STATUS_QUEUED,
-            ]),
+            'email.delivery_delayed' => $log->update($base),
             'email.opened' => $log->update($base + [
-                'status' => EmailLog::STATUS_OPENED,
-                'opened_at' => $log->opened_at ?? now(),
+                'opened_at' => $log->opened_at ?? $eventAt,
             ]),
-            'email.clicked' => $log->update($base + [
-                'status' => EmailLog::STATUS_CLICKED,
-            ]),
+            'email.clicked' => $log->update($base),
             'email.bounced' => $log->update($base + [
-                'status' => EmailLog::STATUS_BOUNCED,
-                'bounced_at' => $log->bounced_at ?? now(),
-                'error_message' => $data['bounce']['message'] ?? $data['message'] ?? $log->error_message,
+                'bounced_at' => $log->bounced_at ?? $eventAt,
+                'error_message' => $this->eventError($data) ?? $log->error_message,
             ]),
             'email.failed' => $log->update($base + [
-                'status' => EmailLog::STATUS_FAILED,
-                'error_message' => $data['message'] ?? $log->error_message,
+                'error_message' => $this->eventError($data) ?? $log->error_message,
             ]),
-            'email.complained' => $log->update($base + [
-                'status' => EmailLog::STATUS_COMPLAINED,
-            ]),
+            'email.complained' => $log->update($base),
             default => null,
         };
+    }
+
+    private function statusRank(string $status): int
+    {
+        return match ($status) {
+            EmailLog::STATUS_SENT => 1,
+            EmailLog::STATUS_FAILED => 2,
+            EmailLog::STATUS_BOUNCED => 3,
+            EmailLog::STATUS_DELIVERED => 4,
+            EmailLog::STATUS_OPENED => 5,
+            EmailLog::STATUS_CLICKED => 6,
+            EmailLog::STATUS_COMPLAINED => 7,
+            default => 0,
+        };
+    }
+
+    private function eventError(array $data): ?string
+    {
+        $message = data_get($data, 'bounce.message')
+            ?? data_get($data, 'error.message')
+            ?? $data['message']
+            ?? $data['reason']
+            ?? null;
+
+        return is_string($message) ? $message : null;
     }
 
     private function buildBody(?string $html, ?string $text): string
@@ -355,6 +429,29 @@ class ResendWebhookController extends Controller
         }
 
         return null;
+    }
+
+    private function appRecipient(array|string|null $to): ?string
+    {
+        $recipients = is_array($to) ? $to : [$to];
+        $normalized = array_values(array_filter(array_map(
+            fn ($recipient) => $this->normalizeEmail($recipient),
+            $recipients
+        )));
+
+        $shared = array_map('strtolower', config('mail.shared_addresses', []));
+        $individual = User::whereNotNull('company_email')
+            ->pluck('company_email')
+            ->map(fn ($email) => strtolower($email))
+            ->all();
+
+        foreach ([...$shared, ...$individual] as $appAddress) {
+            if (in_array($appAddress, $normalized, true)) {
+                return $appAddress;
+            }
+        }
+
+        return $normalized[0] ?? null;
     }
 
     private function normalizeEmail(array|object|string|null $recipient): ?string

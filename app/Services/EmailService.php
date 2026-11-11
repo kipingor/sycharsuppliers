@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Mail\GenericEmail;
 use App\Models\Account;
 use App\Models\EmailLog;
+use Illuminate\Mail\Mailable;
 use Illuminate\Mail\SentMessage;
 use Illuminate\Support\Facades\Mail;
 
@@ -21,6 +22,9 @@ class EmailService
      *                                account_id  int      FK to accounts table
      *                                in_reply_to string   Message-Id for threading
      *                                attachments array    [{name, mime, content}]
+     *                                from_address string Sender identity
+     *                                sender_user_id int   User who sent the message
+     *                                thread_id   int      Conversation root
      */
     public function send(
         string $recipient,
@@ -28,45 +32,78 @@ class EmailService
         string $body,
         array  $options = []
     ): EmailLog {
-        $accountId = $options['account_id']  ?? EmailLog::resolveAccountId($recipient);
         $inReplyTo = $options['in_reply_to'] ?? null;
-        $name      = $options['name']        ?? null;
         $attachments = $options['attachments'] ?? [];
+
+        return $this->sendMailable(
+            $recipient,
+            $subject,
+            $body,
+            new GenericEmail($subject, $body, $inReplyTo, $attachments),
+            $options,
+        );
+    }
+
+    /**
+     * Send and track an email backed by a purpose-built mailable.
+     */
+    public function sendMailable(
+        string $recipient,
+        string $subject,
+        string $body,
+        Mailable $mailable,
+        array $options = [],
+    ): EmailLog {
+        $accountId = $options['account_id'] ?? EmailLog::resolveAccountId($recipient);
+        $name = $options['name'] ?? null;
+        $attachments = $options['attachments'] ?? [];
+        $fromAddress = $options['from_address'] ?? config('mail.from.address');
+        $fromName = $options['from_name'] ?? config('mail.from.name');
 
         $log = EmailLog::create([
             'direction'       => 'outbound',
-            'from_email'      => config('mail.from.address'),
-            'from_name'       => config('mail.from.name'),
+            'from_email'      => $fromAddress,
+            'from_name'       => $fromName,
             'account_id'      => $accountId,
             'recipient_email' => $recipient,
             'recipient_name'  => $name,
             'subject'         => $subject,
             'body'            => $body,
+            'billing_id'      => $options['billing_id'] ?? null,
+            'sender_user_id'  => $options['sender_user_id'] ?? auth()->id(),
+            'thread_id'       => $options['thread_id'] ?? null,
             'status'          => EmailLog::STATUS_QUEUED,
-            'in_reply_to'     => $inReplyTo,
+            'in_reply_to'     => $options['in_reply_to'] ?? null,
             'attachments'     => array_map(
                 fn (array $attachment) => [
                     'name' => $attachment['name'],
                     'mime' => $attachment['mime'] ?? 'application/octet-stream',
-                    'size' => strlen($attachment['content']),
+                    'size' => isset($attachment['content']) ? strlen($attachment['content']) : ($attachment['size'] ?? null),
                 ],
                 $attachments
             ) ?: null,
         ]);
+        if (!$log->thread_id) {
+            $log->update(['thread_id' => $log->id]);
+        }
 
         try {
-            $sentMessage = Mail::to($recipient, $name)
-                ->send(new GenericEmail($subject, $body, $inReplyTo, $attachments));
-
-            $log->update([
-                'status'      => EmailLog::STATUS_SENT,
-                'sent_at'     => now(),
-                'message_id'  => $this->extractMessageId($sentMessage),
-                'provider_id' => $this->extractProviderId($sentMessage),
-            ]);
+            if ($mailable instanceof GenericEmail) {
+                $mailable->setSender($fromAddress, $fromName);
+            }
+            $sentMessage = Mail::to($recipient, $name)->send($mailable);
         } catch (\Throwable $e) {
             $log->markAsFailed($e->getMessage());
+
+            return $log;
         }
+
+        $log->update([
+            'status'      => EmailLog::STATUS_SENT,
+            'sent_at'     => now(),
+            'message_id'  => $this->extractMessageId($sentMessage),
+            'provider_id' => $this->extractProviderId($sentMessage),
+        ]);
 
         return $log;
     }
@@ -102,6 +139,8 @@ class EmailService
             'name'        => $inbound->from_name,
             'account_id'  => $inbound->account_id,
             'in_reply_to' => $inbound->message_id,
+            'from_address' => $inbound->recipient_email,
+            'thread_id' => $inbound->conversationRoot()->id,
         ], $options));
     }
 
@@ -132,9 +171,9 @@ class EmailService
             return null;
         }
 
-        $messageId = $sentMessage->getOriginalMessage()->getMessageId();
-
-        return $this->cleanMessageId($messageId);
+        return $this->cleanMessageId(
+            $sentMessage->getSymfonySentMessage()->getMessageId()
+        );
     }
 
     private function cleanMessageId(?string $messageId): ?string

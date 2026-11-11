@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     ArrowLeft, CheckCircle2, AlertCircle, Eye, ExternalLink,
-    Mail, Paperclip, Reply, Send, Trash,
+    Mail, Paperclip, Reply, Send, Trash, RefreshCw,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,13 +46,15 @@ interface EmailDetail {
     delivered_at?: string | null;
     opened_at?: string | null;
     bounced_at?: string | null;
+    error_message?: string | null;
     account?: { id: number; name: string; account_number: string; email?: string; phone?: string } | null;
 }
 
 interface ShowEmailProps {
     email: EmailDetail;
     thread: ThreadMessage[];
-    can: { reply: boolean; delete: boolean };
+    can: { reply: boolean; canReply: boolean; claim: boolean; delete: boolean };
+    conversation: { is_shared: boolean; claimed_by: string | null; claimed_by_me: boolean };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,7 +81,7 @@ function fmtBytes(b: number): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ShowEmail() {
-    const { email, thread, can } = usePage<SharedData & ShowEmailProps>().props;
+    const { email, thread, can, conversation } = usePage<SharedData & ShowEmailProps>().props;
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Emails', href: route('emails.index') },
@@ -91,12 +93,19 @@ export default function ShowEmail() {
             router.delete(route('emails.destroy', email.id));
     };
 
+    const handleClaim = () => {
+        router.post(route('emails.claim', email.id), {}, { preserveScroll: true });
+    };
+
     // Delivery timeline shown for outbound emails
     const timeline = email.direction === 'outbound' ? [
         { label: 'Sent',      time: email.sent_at,      icon: Send,         done: !!email.sent_at,      warn: false },
         { label: 'Delivered', time: email.delivered_at, icon: CheckCircle2, done: !!email.delivered_at, warn: false },
         { label: 'Opened',    time: email.opened_at,    icon: Eye,          done: !!email.opened_at,    warn: false },
         { label: 'Bounced',   time: email.bounced_at,   icon: AlertCircle,  done: !!email.bounced_at,   warn: true  },
+        { label: 'Failed',    time: null,               icon: AlertCircle,  done: email.status === 'failed', warn: true },
+        { label: 'Complaint', time: null,               icon: AlertCircle,  done: email.status === 'complained', warn: true },
+        { label: 'Clicked',   time: null,               icon: ExternalLink, done: email.status === 'clicked', warn: false },
     ] : [];
 
     return (
@@ -115,7 +124,7 @@ export default function ShowEmail() {
                         <h1 className="text-lg font-semibold truncate">{email.subject}</h1>
                     </div>
                     <div className="flex gap-2 shrink-0">
-                        {can.reply && email.direction === 'inbound' && (
+                        {can.reply && can.canReply && email.direction === 'inbound' && (
                             <Link href={route('emails.reply', email.id)}>
                                 <Button size="sm">
                                     <Reply size={14} className="mr-1" /> Reply
@@ -132,6 +141,23 @@ export default function ShowEmail() {
 
                 {/* ── Main grid ── */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+                    {conversation.is_shared && (
+                        <Card className="lg:col-span-3">
+                            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-sm">
+                                    <p className="font-medium">Shared inbox conversation</p>
+                                    <p className="text-muted-foreground">
+                                        {conversation.claimed_by
+                                            ? `Claimed by ${conversation.claimed_by}${conversation.claimed_by_me ? ' (you)' : ''}`
+                                            : 'Unclaimed — claim it before replying so teammates do not duplicate responses.'}
+                                    </p>
+                                </div>
+                                {can.claim && !conversation.claimed_by && (
+                                    <Button onClick={handleClaim}>Claim conversation</Button>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Thread / body column */}
                     <div className="lg:col-span-2 space-y-3">
@@ -231,8 +257,17 @@ export default function ShowEmail() {
                         {/* Delivery timeline — outbound only */}
                         {email.direction === 'outbound' && (
                             <Card>
-                                <CardHeader className="px-4 pt-4 pb-2">
+                                <CardHeader className="flex flex-row items-center justify-between px-4 pt-4 pb-2">
                                     <CardTitle className="text-sm">Delivery Tracking</CardTitle>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Refresh delivery status"
+                                        onClick={() => router.reload({ only: ['email', 'thread'] })}
+                                    >
+                                        <RefreshCw size={14} />
+                                    </Button>
                                 </CardHeader>
                                 <CardContent className="px-4 pb-4 space-y-2">
                                     {timeline.map(({ label, time, icon: Icon, done, warn }) => (
@@ -246,6 +281,16 @@ export default function ShowEmail() {
                                             )}
                                         </div>
                                     ))}
+                                    {email.status === 'sent' && !email.delivered_at && (
+                                        <p className="pt-1 text-xs text-muted-foreground">
+                                            Accepted by the email provider; delivery confirmation is still pending.
+                                        </p>
+                                    )}
+                                    {email.error_message && (
+                                        <p className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+                                            {email.error_message}
+                                        </p>
+                                    )}
                                 </CardContent>
                             </Card>
                         )}

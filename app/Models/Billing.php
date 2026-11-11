@@ -143,6 +143,11 @@ class Billing extends Model implements Auditable
         return $this->hasMany(CreditNote::class);
     }
 
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(EmailLog::class);
+    }
+
     /* =========================
      | Scopes
      |========================= */
@@ -199,16 +204,26 @@ class Billing extends Model implements Auditable
      */
     public function getPaidAmountAttribute(): float
     {
-        $paidViaAllocations = $this->allocations()
-            ->whereHas('payment', fn ($q) => $q->where('status', 'completed'))
+        $allocations = $this->relationLoaded('allocations')
+            ? $this->allocations
+            : $this->allocations()->with('payment')->get();
+        $directPayments = $this->relationLoaded('directPayments')
+            ? $this->directPayments
+            : $this->directPayments()->get();
+
+        $paidViaAllocations = $allocations
+            ->filter(fn ($allocation) => $allocation->payment
+                && $allocation->payment->status === 'completed'
+                && $allocation->payment->deleted_at === null)
             ->sum('allocated_amount');
 
-        $allocatedPaymentIds = $this->allocations()->pluck('payment_id')->filter()->toArray();
-        $paidDirectly = $this->directPayments()
-            ->whereNotIn('id', $allocatedPaymentIds)
+        $allocatedPaymentIds = $allocations->pluck('payment_id')->filter();
+        $paidDirectly = $directPayments
+            ->reject(fn ($payment) => $allocatedPaymentIds->contains($payment->id))
+            ->filter(fn ($payment) => $payment->status === 'completed' && $payment->deleted_at === null)
             ->sum('amount');
 
-        return $paidViaAllocations + $paidDirectly;
+        return (float) $paidViaAllocations + (float) $paidDirectly;
     }
 
     /**
@@ -216,21 +231,12 @@ class Billing extends Model implements Auditable
      */
     public function getBalanceAttribute(): float
     {
-        // Via allocations
-        $paidViaAllocations = $this->allocations()
-            ->whereHas('payment', fn ($q) => $q->where('status', 'completed'))
-            ->sum('allocated_amount');
+        $credits = $this->relationLoaded('creditNotes')
+            ? $this->creditNotes
+            : $this->creditNotes()->get();
+        $credited = $credits->where('status', 'applied')->sum('amount');
 
-        // Via direct payments.billing_id (avoid double-counting)
-        $allocatedPaymentIds = $this->allocations()->pluck('payment_id')->filter()->toArray();
-        $paidDirectly = $this->directPayments()
-            ->whereNotIn('id', $allocatedPaymentIds)
-            ->sum('amount');
-
-        // Applied credit notes
-        $credited = $this->creditNotes()->where('status', 'applied')->sum('amount');
-
-        return max(0, $this->total_amount - $paidViaAllocations - $paidDirectly - $credited);
+        return max(0, round((float) $this->total_amount - $this->paid_amount - (float) $credited, 2));
     }
 
     public function getOutstandingBalance(): float
@@ -308,7 +314,9 @@ class Billing extends Model implements Auditable
      */
     public function isOverdue(): bool
     {
-        return $this->status === 'pending' && $this->due_date->isPast();
+        return in_array($this->status, ['pending', 'partially_paid', 'overdue'], true)
+            && $this->due_date
+            && $this->due_date->isPast();
     }
 
     /**
@@ -324,7 +332,7 @@ class Billing extends Model implements Auditable
      */
     public function canBeModified(): bool
     {
-        return !in_array($this->status, ['paid', 'voided']);
+        return !in_array($this->status, ['paid', 'voided', 'written_off']);
     }
 
     /* =========================

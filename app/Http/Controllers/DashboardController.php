@@ -52,8 +52,8 @@ class DashboardController extends Controller
 
     protected function getMetrics(Carbon $startDate, Carbon $endDate): array
     {
-        $totalAccounts = Account::count();
-        $activeAccounts = Account::active()->count();
+        $totalAccounts = Account::query()->count('*');
+        $activeAccounts = Account::active()->count('*');
         $activeMeters = Meter::where('status', 'active')->count();
         $totalResidents = Resident::count();
 
@@ -61,7 +61,7 @@ class DashboardController extends Controller
             ->whereBetween('payment_date', [$startDate, $endDate])
             ->sum('amount');
 
-        $pendingBilled = Billing::whereIn('status', ['pending', 'partially_paid'])->sum('amount_due');
+        $pendingBilled = Billing::whereIn('status', ['pending', 'partially_paid', 'overdue'])->sum('amount_due');
         $overdueBillsCount = Billing::where('status', 'pending')
             ->where('due_date', '<', now())->count();
         $overdueAmount = Billing::where('status', 'pending')

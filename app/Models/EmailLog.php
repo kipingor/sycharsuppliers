@@ -24,6 +24,7 @@ class EmailLog extends Model
 
     protected $fillable = [
         'direction', 'from_email', 'from_name', 'account_id',
+        'billing_id', 'sender_user_id', 'thread_id', 'claimed_by', 'claimed_at',
         'recipient_email', 'recipient_name', 'subject', 'body',
         'status', 'error_message',
         'message_id', 'provider_id', 'mailgun_id', 'in_reply_to',
@@ -37,6 +38,7 @@ class EmailLog extends Model
         'delivered_at' => 'datetime',
         'opened_at'    => 'datetime',
         'bounced_at'   => 'datetime',
+        'claimed_at'   => 'datetime',
         'attachments'  => 'array',
         'raw_payload'  => 'array',
     ];
@@ -46,6 +48,37 @@ class EmailLog extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    public function billing(): BelongsTo
+    {
+        return $this->belongsTo(Billing::class);
+    }
+
+    public function sender(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sender_user_id');
+    }
+
+    public function claimant(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimed_by');
+    }
+
+    public function conversationRoot(): self
+    {
+        if ($this->thread_id && $this->thread_id !== $this->id) {
+            return static::find($this->thread_id) ?? $this;
+        }
+
+        if ($this->in_reply_to) {
+            $parent = static::where('message_id', $this->in_reply_to)->first();
+            if ($parent) {
+                return $parent->conversationRoot();
+            }
+        }
+
+        return $this;
     }
 
     // ─── Query scopes ──────────────────────────────────────────────────────
@@ -134,6 +167,13 @@ class EmailLog extends Model
      */
     public function threadEmails()
     {
+        if ($this->thread_id) {
+            return static::where('thread_id', $this->thread_id)
+                ->orWhere('id', $this->thread_id)
+                ->orderBy('created_at')
+                ->get();
+        }
+
         $root = $this->in_reply_to ?? $this->message_id;
 
         if (!$root) {

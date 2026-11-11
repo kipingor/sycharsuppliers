@@ -6,7 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Mail\Mailables\Headers;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Queue\SerializesModels;
 
@@ -21,16 +21,28 @@ class GenericEmail extends Mailable
     use Queueable, SerializesModels;
 
     public function __construct(
-        protected string  $emailSubject,
-        protected string  $emailBody,          // HTML accepted
-        protected ?string $inReplyTo = null,   // Message-Id of the email being replied to
+        protected string $emailSubject,
+        protected string $emailBody,
+        protected ?string $inReplyTo = null,
         protected array $emailAttachments = [],
+        protected ?string $senderAddress = null,
+        protected ?string $senderName = null,
     ) {
     }
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: $this->emailSubject);
+        $from = $this->senderAddress
+            ? new Address($this->senderAddress, $this->senderName ?? '')
+            : null;
+
+        return new Envelope(from: $from, subject: $this->emailSubject);
+    }
+
+    public function setSender(string $address, string $name): void
+    {
+        $this->senderAddress = $address;
+        $this->senderName = $name;
     }
 
     public function withSymfonyMessage($message): void

@@ -93,8 +93,8 @@ class ReconcilePaymentsJob implements ShouldQueue
                     Log::info('Payment reconciled', [
                         'payment_id' => $payment->id,
                         'account_id' => $payment->account_id,
-                        'reconciliation_status' => $result->reconciliationStatus,
-                        'allocated_amount' => $result->allocatedAmount,
+                        'reconciliation_status' => $result->payment->reconciliation_status,
+                        'allocated_amount' => $result->totalAllocated,
                     ]);
                 } catch (\Exception $e) {
                     $failureCount++;

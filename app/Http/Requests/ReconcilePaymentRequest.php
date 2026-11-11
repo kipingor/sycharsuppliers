@@ -41,7 +41,7 @@ class ReconcilePaymentRequest extends FormRequest
                 'integer',
                 Rule::exists('billings', 'id')
                     ->where('account_id', $payment->account_id)
-                    ->whereIn('status', ['pending', 'partially_paid']),
+                    ->whereIn('status', ['pending', 'partially_paid', 'overdue']),
             ],
             'manual_allocations.*.amount' => [
                 'required',

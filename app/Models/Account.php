@@ -150,7 +150,7 @@ class Account extends Model implements Auditable
     public function scopeWithOutstandingBalance($query)
     {
         return $query->whereHas('billings', function ($q) {
-            $q->whereIn('status', ['pending', 'partially_paid']);
+            $q->whereIn('status', ['pending', 'partially_paid', 'overdue']);
         });
     }
 
@@ -210,7 +210,7 @@ class Account extends Model implements Auditable
     public function getTotalDue(): float
     {
         return $this->billings()
-            ->whereIn('status', ['pending', 'partially_paid'])
+            ->whereIn('status', ['pending', 'partially_paid', 'overdue'])
             ->sum('total_amount');
     }
 
@@ -247,7 +247,7 @@ class Account extends Model implements Auditable
     public function getOutstandingBills()
     {
         return $this->billings()
-            ->whereIn('status', ['pending', 'partially_paid'])
+            ->whereIn('status', ['pending', 'partially_paid', 'overdue'])
             ->orderBy('due_date', 'asc')
             ->get();
     }

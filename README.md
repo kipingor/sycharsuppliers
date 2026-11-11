@@ -15,6 +15,55 @@ A modern web application for managing water usage, billing, payments, and custom
 - ⚙️ **Offline Meter Reading API** – Support for mobile apps
 - 📤 **Send Statements with Attachments** – Automatically email detailed PDF statements
 
+### Historical consumption rate review
+
+To export billing details and compare each recorded unit rate against candidate rates
+of KES 200, 250, and 300 without modifying bills or payments, run:
+
+```bash
+php artisan billing:historical-rate-review
+```
+
+The CSV is saved under `storage/app/reports/`. A custom filename can be supplied with
+`--output=review.csv`. Candidate differences are usage-only estimates; taxes and fixed
+charges are not recalculated. All non-voided records remain marked as unverified until
+the applicable rate dates are supported by evidence and approved. Do not post the
+candidate differences as adjustments directly; preserve existing bills and payment
+allocations and record any approved correction through the accounting adjustment
+process. The report includes bills without detail rows for investigation. Since each row
+represents a billing detail, bill-level totals (including allocated payments and applied
+credit notes) repeat when a bill has multiple details. Payment totals include completed,
+non-deleted allocated payments and completed direct bill payments without counting the
+same payment twice; pending, failed, and deleted payments are excluded.
+
+After confirming the approved historical rates in the CSV, preview their effect with:
+
+```bash
+php artisan billing:apply-historical-rates /path/to/approved-rates.csv
+```
+
+Only CSV rows with a KES 200 or KES 250 `recorded_unit_rate` are eligible. Review the
+preview, then explicitly apply with a documented reason:
+
+```bash
+php artisan billing:apply-historical-rates /path/to/approved-rates.csv \
+  --apply \
+  --reason="Approved historical rate correction from reviewed schedule"
+```
+
+The command asks for confirmation, skips voided/written-off bills and zero or negative
+consumption, and updates the billing detail rate/amount, bill total/open balance, and
+settlement status in one transaction. The open balance is adjusted by the change in bill
+total for unsettled bills, preserving the existing recorded balance. Bills already
+marked paid remain paid and their balances are not recalculated from potentially
+incomplete historical payment links. Payment-history discrepancies are not reconciled
+by this command. It preserves payments and allocations, and writes the corrections and
+reason to the audit trail. Re-run the review export afterward.
+Bill details retain their rate as a snapshot; statements use the stored detail rate and
+bill total, so future tariff updates apply to newly generated bills rather than rewriting
+historical bills. Previously issued statement PDFs are not rewritten; regenerate them to
+show corrected values.
+
 ## 🚀 Tech Stack
 
 - **Backend**: Laravel 12

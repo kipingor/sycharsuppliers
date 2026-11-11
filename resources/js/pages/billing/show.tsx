@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Button } from '@/components/ui/button';
-import { Pencil, Trash, XCircle, RotateCcw, Download, Mail, FileMinus, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pencil, Trash, XCircle, RotateCcw, Download, Mail, FileMinus, AlertTriangle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/table';
@@ -65,12 +65,22 @@ interface Bill {
     total_amount: number;
     paid_amount: number;
     balance: number;
-    status: 'pending' | 'partially_paid' | 'paid' | 'overdue' | 'voided';
+    status: 'pending' | 'partially_paid' | 'paid' | 'overdue' | 'voided' | 'written_off';
     issued_at: string;
     due_date: string;
     paid_at?: string;
     notes?: string;
     account?: Account;
+    email_logs?: Array<{
+        id: number;
+        recipient_email: string;
+        subject: string;
+        status: string;
+        error_message?: string | null;
+        sent_at?: string | null;
+        delivered_at?: string | null;
+        created_at: string;
+    }>;
     details?: BillingDetail[];
     allocations?: PaymentAllocation[];
     credit_notes?: CreditNote[];
@@ -364,6 +374,7 @@ export default function BillShow() {
         pending:        'bg-sky-400/15 text-sky-700 dark:bg-sky-400/10 dark:text-sky-400',
         overdue:        'bg-pink-400/15 text-pink-700 dark:bg-pink-400/10 dark:text-pink-400',
         partially_paid: 'bg-blue-400/15 text-blue-700 dark:bg-blue-400/10 dark:text-blue-400',
+        written_off: 'bg-amber-400/15 text-amber-700 dark:bg-amber-400/10 dark:text-amber-400',
         voided:         'bg-gray-400/15 text-gray-700 dark:bg-gray-400/10 dark:text-gray-400',
     };
 
@@ -371,6 +382,7 @@ export default function BillShow() {
         previous_resident_debt: 'bg-amber-400/15 text-amber-700 dark:text-amber-400',
         billing_error:          'bg-red-400/15 text-red-700 dark:text-red-400',
         goodwill:               'bg-purple-400/15 text-purple-700 dark:text-purple-400',
+        bad_debt_writeoff:      'bg-orange-400/15 text-orange-700 dark:text-orange-400',
         other:                  'bg-gray-400/15 text-gray-700 dark:text-gray-400',
     };
 
@@ -378,6 +390,7 @@ export default function BillShow() {
         previous_resident_debt: 'Prev. Resident Debt',
         billing_error:          'Billing Error',
         goodwill:               'Goodwill',
+        bad_debt_writeoff:      'Bad Debt Write-off',
         other:                  'Other',
     };
 
@@ -412,13 +425,17 @@ export default function BillShow() {
     };
 
     const handleEmailStatement = () => {
-        const email = prompt('Enter email address to send statement:', bill.account?.email || '');
+        const priorSends = bill.email_logs?.length ?? 0;
+        const promptText = priorSends
+            ? `This bill has ${priorSends} prior email attempt${priorSends === 1 ? '' : 's'}. Send another copy to:`
+            : 'Enter email address to send statement:';
+        const email = prompt(promptText, bill.account?.email || '');
         if (email) {
             router.post(route('billings.statement.send', bill.id), { email });
         }
     };
 
-    const canApplyCreditNote = bill.status !== 'voided' && bill.status !== 'paid' && bill.balance > 0;
+    const canApplyCreditNote = ['pending', 'partially_paid', 'overdue'].includes(bill.status) && bill.balance > 0;
     const appliedCreditNotes = (bill.credit_notes ?? []).filter(n => n.status === 'applied');
     const totalCredited      = appliedCreditNotes.reduce((s, n) => s + n.amount, 0);
 
@@ -484,7 +501,7 @@ export default function BillShow() {
                             <Download size={16} className="mr-2" /> Download
                         </Button>
                         <Button variant="outline" size="sm" onClick={handleEmailStatement}>
-                            <Mail size={16} className="mr-2" /> Email
+                            <Mail size={16} className="mr-2" /> {bill.email_logs?.length ? 'Email Again' : 'Email'}
                         </Button>
                         {canApplyCreditNote && (
                             <Button
@@ -580,6 +597,11 @@ export default function BillShow() {
                                 <Badge className={statusClasses[bill.status]}>
                                     {bill.status.replace('_', ' ')}
                                 </Badge>
+                                {bill.status === 'written_off' && (
+                                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                                        Settled by credit note; no payment was received for the written-off amount.
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <p className="text-xs text-gray-500">Issued Date</p>
@@ -598,6 +620,51 @@ export default function BillShow() {
                         </CardContent>
                     </Card>
                 </div>
+
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-base">Bill Email History</CardTitle>
+                        <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">
+                                {bill.email_logs?.length || 0} attempts
+                            </span>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Refresh bill email status"
+                                onClick={() => router.reload({ only: ['bill'] })}
+                            >
+                                <RefreshCw size={15} />
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {bill.email_logs?.length ? (
+                            <div className="space-y-3">
+                                {bill.email_logs.map((email) => (
+                                    <div key={email.id} className="flex flex-wrap items-center justify-between gap-2 border-b pb-3 last:border-0 last:pb-0">
+                                        <div className="min-w-0">
+                                            <p className="break-all text-sm font-medium">{email.recipient_email}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                {email.sent_at
+                                                    ? `Sent ${new Date(email.sent_at).toLocaleString()}`
+                                                    : `Attempted ${new Date(email.created_at).toLocaleString()}`}
+                                                {email.delivered_at && ` · Delivered ${new Date(email.delivered_at).toLocaleString()}`}
+                                            </p>
+                                            {email.error_message && (
+                                                <p className="mt-1 break-words text-xs text-destructive">{email.error_message}</p>
+                                            )}
+                                        </div>
+                                        <Badge variant="outline" className="capitalize">{email.status.replace('_', ' ')}</Badge>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">No bill emails have been recorded yet.</p>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* Billing Details */}
                 {bill.details && bill.details.length > 0 && (

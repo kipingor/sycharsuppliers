@@ -91,8 +91,8 @@ class ProcessPaymentJob implements ShouldQueue
 
                 Log::info('Payment reconciled successfully', [
                     'payment_id' => $this->payment->id,
-                    'reconciliation_status' => $result->reconciliationStatus,
-                    'allocated_amount' => $result->allocatedAmount,
+                    'reconciliation_status' => $result->payment->reconciliation_status,
+                    'allocated_amount' => $result->totalAllocated,
                     'remaining_amount' => $result->remainingAmount,
                     'bills_paid' => count($result->allocations),
                 ]);

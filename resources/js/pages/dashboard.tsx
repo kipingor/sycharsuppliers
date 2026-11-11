@@ -6,8 +6,9 @@ import AppLayout from '@/layouts/app-layout';
 import { formatCurrency } from '@/lib/utils';
 import { SharedData, type BreadcrumbItem, type User } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Activity, AlertCircle, CreditCard, Download, FileText, Gauge, TrendingUp, Users } from 'lucide-react';
+import { Activity, AlertCircle, CreditCard, Download, FileText, Gauge, Plus, TrendingUp, Users } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' }];
 
@@ -127,11 +128,18 @@ export default function Dashboard() {
             color: metrics.overdueCount > 0 ? 'border-red-200 dark:border-red-900/40' : 'border-orange-200 dark:border-orange-900/40',
         },
     ];
+    const quickActions = [
+        { label: 'New Reading', href: route('meter-readings.create') },
+        ...(can.viewReports ? [{ label: 'View Reports', href: route('reports.index') }] : []),
+        ...(can.createBills ? [{ label: 'New Bill', href: route('billings.create') }] : []),
+        ...(can.createPayments ? [{ label: 'New Payment', href: route('payments.create') }] : []),
+        ...(can.viewAccounts ? [{ label: 'All Accounts', href: route('accounts.index') }] : []),
+    ];
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Dashboard" />
-            <div className="mx-auto flex h-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-6">
+            <div className="mx-auto flex h-full min-w-0 max-w-7xl flex-1 flex-col gap-6 p-4 pb-24 md:p-6">
                 {/* Header */}
                 <div className="flex flex-wrap items-end justify-between gap-3">
                     <div>
@@ -161,18 +169,18 @@ export default function Dashboard() {
                 </div>
 
                 {/* KPI Cards */}
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                     {can.viewReports &&
                         metricCards.map((card) => (
-                            <Card key={card.title} className={`border-2 ${card.color}`}>
-                                <CardContent className="pt-5">
+                            <Card key={card.title} className={`min-w-0 border-2 ${card.color}`}>
+                                <CardContent className="p-3 pt-4 sm:p-5">
                                     <div className="flex items-start justify-between">
-                                        <div>
+                                        <div className="min-w-0">
                                             <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{card.title}</p>
-                                            <p className="mt-1 text-2xl font-bold">{card.value}</p>
-                                            <p className="text-muted-foreground mt-1 text-xs">{card.sub}</p>
+                                            <p className="mt-1 break-words text-sm leading-tight font-bold tabular-nums sm:text-2xl">{card.value}</p>
+                                            <p className="text-muted-foreground mt-1 text-xs leading-tight">{card.sub}</p>
                                         </div>
-                                        <div className="mt-0.5">{card.icon}</div>
+                                        <div className="mt-0.5 ml-1 shrink-0">{card.icon}</div>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -322,18 +330,12 @@ export default function Dashboard() {
                                 </Card>
                             </>
                         )}
-                        <Card>
+                        <Card className="hidden md:block">
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-base">Quick Actions</CardTitle>
                             </CardHeader>
                             <CardContent className="grid grid-cols-2 gap-2">
-                                {[
-                                    { label: 'New Reading', href: route('meter-readings.create') },
-                                    ...(can.viewReports ? [{ label: 'View Reports', href: route('reports.index') }] : []),
-                                    ...(can.createBills ? [{ label: 'New Bill', href: route('billings.create') }] : []),
-                                    ...(can.createPayments ? [{ label: 'New Payment', href: route('payments.create') }] : []),
-                                    ...(can.viewAccounts ? [{ label: 'All Accounts', href: route('accounts.index') }] : []),
-                                ].map((action) => (
+                                {quickActions.map((action) => (
                                     <Link key={action.label} href={action.href}>
                                         <Button variant="outline" size="sm" className="h-9 w-full text-xs">
                                             {action.label}
@@ -344,6 +346,22 @@ export default function Dashboard() {
                         </Card>
                     </div>
                 </div>
+            </div>
+            <div className="fixed right-5 bottom-5 z-50 md:hidden">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button size="icon" className="h-14 w-14 rounded-full shadow-lg" aria-label="Open quick actions">
+                            <Plus className="h-6 w-6" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" side="top" className="mb-2 min-w-48">
+                        {quickActions.map((action) => (
+                            <DropdownMenuItem key={action.label} asChild>
+                                <Link href={action.href}>{action.label}</Link>
+                            </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </AppLayout>
     );

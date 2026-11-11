@@ -130,6 +130,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Credit notes list
 
     Route::prefix('credit-notes')->name('credit-notes.')->group(function () {
+        Route::get('/apply', [CreditNoteController::class, 'applyForm'])->name('apply');
+        Route::post('/apply', [CreditNoteController::class, 'applyBulk'])->name('apply-bulk');
         Route::get('/', [CreditNoteController::class, 'index'])->name('index');
 
         // Void a credit note
