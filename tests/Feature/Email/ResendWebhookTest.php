@@ -13,12 +13,16 @@ class ResendWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    private string $webhookSecret;
+
     protected function setUp(): void
     {
         parent::setUp();
 
+        $this->webhookSecret = 'whsec_'.base64_encode(random_bytes(32));
+
         config([
-            'resend.webhook.secret' => 'whsec_dGVzdF9zZWNyZXRfZm9yX3dlYmhvb2tz',
+            'resend.webhook.secret' => $this->webhookSecret,
             'resend.webhook.tolerance' => 300,
         ]);
     }
@@ -230,10 +234,9 @@ class ResendWebhookTest extends TestCase
 
     private function signedHeaders(array $payload): array
     {
-        $secret = 'whsec_dGVzdF9zZWNyZXRfZm9yX3dlYmhvb2tz';
         $messageId = 'msg_'.str()->random(12);
         $timestamp = time();
-        $signature = $this->signWebhook($secret, $messageId, $timestamp, json_encode($payload, JSON_UNESCAPED_SLASHES));
+        $signature = $this->signWebhook($this->webhookSecret, $messageId, $timestamp, json_encode($payload, JSON_UNESCAPED_SLASHES));
 
         return [
             'svix-id' => $messageId,
