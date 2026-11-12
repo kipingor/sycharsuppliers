@@ -25,6 +25,7 @@ export interface Auth {
         expense?: PermissionSet;
         employee?: PermissionSet;
         emailLog?: PermissionSet;
+        systemSettings?: PermissionSet & { manage?: boolean };
     };
 }
 

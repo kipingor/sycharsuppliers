@@ -2,15 +2,15 @@
 
 namespace App\Http\Middleware;
 
-use Illuminate\Foundation\Inspiring;
 use App\Models\Billing;
 use App\Models\EmailLog;
 use App\Models\Employee;
 use App\Models\Expense;
 use App\Models\Meter;
 use App\Models\Payment;
-use App\Models\Resident;
 use App\Models\Report;
+use App\Models\Resident;
+use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 use Tighten\Ziggy\Ziggy;
@@ -84,7 +84,10 @@ class HandleInertiaRequests extends Middleware
                     ],
                     'emailLog' => [
                         'viewAny' => $request->user()?->can('viewAny', EmailLog::class) ?? false,
-                        'create'  => $request->user()?->can('create',  EmailLog::class) ?? false,
+                        'create' => $request->user()?->can('create', EmailLog::class) ?? false,
+                    ],
+                    'systemSettings' => [
+                        'manage' => $request->user()?->can('manage', \App\Models\SystemSetting::class) ?? false,
                     ],
                 ] : null,
             ],
@@ -95,10 +98,10 @@ class HandleInertiaRequests extends Middleware
                 'info' => $request->session()->get('info'),
                 'after_reading' => $request->session()->get('after_reading'),
             ],
-            'ziggy' => fn(): array => [
+            'ziggy' => fn (): array => [
                 ...(new Ziggy)->toArray(),
                 'location' => $request->url(),
-            ]
+            ],
         ];
     }
 }

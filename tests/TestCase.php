@@ -26,6 +26,7 @@ abstract class TestCase extends BaseTestCase
 
         foreach ([
             'manage-users',
+            'manage-settings',
             'manage-residents',
             'view-reports',
             'manage-bills',

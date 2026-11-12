@@ -14,6 +14,25 @@ A modern web application for managing water usage, billing, payments, and custom
 - 📊 **Dashboard & Reporting** – Compare billed vs extracted water, download billing reports
 - ⚙️ **Offline Meter Reading API** – Support for mobile apps
 - 📤 **Send Statements with Attachments** – Automatically email detailed PDF statements
+- ⚙️ **System Settings** – Admin-managed email, bank, M-Pesa, company, and billing configuration
+- 💬 **Staff Communications** – Persistent notifications, acknowledged priority messages, announcements, and internal chat
+
+### System settings and staff communications
+
+Admins (or users with the Spatie `manage-settings` permission) can configure system-wide
+email delivery, multiple bank accounts, M-Pesa credentials, and company/billing defaults
+under **Settings → System**. Secrets are encrypted in the database, are never included in
+the settings page response, and are preserved when their password fields are left blank.
+M-Pesa settings also configure the existing STK Push flow; the connection test checks the
+Safaricom OAuth endpoint. The email test sends a message to the supplied recipient.
+
+The authenticated communication dock polls for unread database notifications, priority
+messages, announcements, and operational counts every 30 seconds. Chat refreshes every
+5 seconds. Critical and high-priority messages remain overlaid until the recipient
+acknowledges them. No WebSocket service is required. The compact floating icon dock stays
+clear of the sidebar's account/navigation controls. Chat opens as a Meet-style floating
+panel with blue outgoing bubbles and neutral incoming bubbles; on mobile it resizes to
+the viewport instead of covering the full-width footer.
 
 ### Historical consumption rate review
 
