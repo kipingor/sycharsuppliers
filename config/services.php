@@ -35,6 +35,19 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
+    'mailersend' => [
+        'api_key' => env('MAILERSEND_API_KEY'),
+    ],
+
+    'mpesa' => [
+        'consumer_key' => env('MPESA_CONSUMER_KEY'),
+        'consumer_secret' => env('MPESA_CONSUMER_SECRET'),
+        'passkey' => env('MPESA_PASSKEY'),
+        'environment' => env('MPESA_ENVIRONMENT', 'sandbox'),
+        'shortcode' => env('MPESA_SHORTCODE'),
+        'callback_url' => env('MPESA_CALLBACK_URL'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

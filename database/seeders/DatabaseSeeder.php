@@ -2,22 +2,19 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use App\Models\Resident;
-use App\Models\Meter;
 use App\Models\Billing;
-use App\Models\Payment;
-use App\Models\MeterReading;
-use App\Models\Employee;
 use App\Models\BillingDetail;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\Models\Permission;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use App\Models\Employee;
+use App\Models\Meter;
+use App\Models\MeterReading;
+use App\Models\Payment;
+use App\Models\Resident;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
@@ -42,7 +39,7 @@ class DatabaseSeeder extends Seeder
 
         // Define permissions
         $permissions = [
-            'manage-users', 'manage-residents', 'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings'
+            'manage-users', 'manage-settings', 'manage-residents', 'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings',
         ];
 
         foreach ($permissions as $permission) {
@@ -50,7 +47,7 @@ class DatabaseSeeder extends Seeder
         }
 
         // Assign permissions to roles
-        $admin->givePermissionTo(['manage-users', 'manage-residents',  'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings']);
+        $admin->givePermissionTo(['manage-users', 'manage-settings', 'manage-residents',  'view-reports', 'manage-bills', 'process-payments', 'record-meter-readings']);
         $accountant->givePermissionTo(['view-reports', 'process-payments']);
         $field_officer->givePermissionTo(['record-meter-readings']);
 
@@ -83,7 +80,7 @@ class DatabaseSeeder extends Seeder
         //             'meter_id' => $meter->id,
         //             'amount_due' => $unitsUsed * 300, // Example rate per unit
         //         ]);
-               
+
         //         BillingDetail::factory()->create([
         //             'billing_id' => $bill->id,
         //             'previous_reading_value' => $previousReading,
@@ -92,7 +89,7 @@ class DatabaseSeeder extends Seeder
         //         ]);
 
         //         // Create a payment for some of the meters
-                 
+
         //         if (rand(0, 1)) {
         //             $payment = Payment::factory()->create(['meter_id' => $meter->id, 'payment_date' => $readingDate->addDays(rand(1, 15))]);
         //             $payment->status = 'completed';
